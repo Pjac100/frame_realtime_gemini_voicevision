@@ -1,0 +1,66 @@
+name: Build Frame Vision Gemini Demo APK
+
+# Controls when the workflow will run
+on:
+  push:
+    branches:
+      - main # Or your primary development branch (e.g., master, develop)
+  pull_request:
+    branches:
+      - main # Or your primary development branch
+  workflow_dispatch: # Allows you to trigger this workflow manually from the Actions tab
+
+jobs:
+  build_apk:
+    name: Build Demo APK
+    runs-on: ubuntu-latest # Use the latest available Ubuntu runner
+
+    steps:
+      # 1. Checks out your repository under $GITHUB_WORKSPACE, so your workflow can access it
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      # 2. Set up Java Development Kit (JDK) - Required for Android builds
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 3. Set up Flutter SDK
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable' # Uses the latest stable Flutter SDK.
+                            # Change to 'beta', 'dev', or a specific version (e.g., '3.22.0')
+                            # if your project requires it.
+
+      # 4. Install Flutter project dependencies
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      # 5. Ensure android/gradlew is executable (good practice)
+      # Flutter uses this script to run Gradle tasks for the Android build.
+      - name: Ensure gradlew is executable
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          else
+            echo "android/gradlew not found, skipping chmod. Flutter build will attempt to proceed."
+          fi
+
+      # 6. Build the debug APK
+      - name: Build Debug APK
+        run: flutter build apk --debug
+        # If you encounter build failures due to Android Gradle Plugin (AGP) or Kotlin
+        # version warnings from Flutter, you can try adding this flag:
+        # run: flutter build apk --debug --android-skip-build-dependency-validation
+
+      # 7. Upload the generated APK as an artifact
+      # This makes the APK downloadable from the workflow run's summary page.
+      - name: Upload Demo APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frame-vision-gemini-debug.apk # Name of the artifact you'll download
+          path: build/app/outputs/flutter-apk/app-debug.apk # Standard path for Flutter debug APKs
+          if-no-files-found: error # Fail the workflow if the APK isn't found
