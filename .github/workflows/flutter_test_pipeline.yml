@@ -1,0 +1,78 @@
+name: Flutter CI - Test Pipeline
+
+# 1. TRIGGER: When the pipeline should run
+# Runs on pushes to the main or develop branches, and on any pull request
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches: # Or target specific branches like [ main, develop ]
+      - '*'
+
+jobs:
+  test:
+    name: Run Flutter Analyzer & Tests
+    runs-on: ubuntu-latest # Use a Linux runner
+
+    steps:
+      # 2. SETUP ENVIRONMENT: Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4 # Uses the official checkout action
+
+      # 2. SETUP ENVIRONMENT: Setup Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2 # A popular action for Flutter setup
+        with:
+          flutter-version: '3.x.x' # Specify your Flutter version (e.g., '3.22.0' or use a channel like 'stable')
+          channel: 'stable' # Optional: specify channel
+          cache: true # Enable caching of Flutter SDK and pub dependencies
+
+      # (Optional) 2. SETUP ENVIRONMENT: Setup Java (if needed by any test dependencies or future build steps)
+      # - name: Setup Java
+      #   uses: actions/setup-java@v3
+      #   with:
+      #     distribution: 'temurin'
+      #     java-version: '17' # Or the version required by your Android Gradle Plugin
+
+      # 3. DEPENDENCIES: Get Flutter dependencies
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # 4. STATIC ANALYSIS: Check formatting
+      #    Fails if any files need reformatting.
+      - name: Check Dart formatting
+        run: flutter format --output=none --set-exit-if-changed .
+
+      # 4. STATIC ANALYSIS: Analyze Dart code
+      #    Fails if there are any analyzer issues (errors, warnings based on your analysis_options.yaml).
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      # 5. TESTING: Run Flutter tests (unit and widget tests)
+      #    The `test/` directory should contain your test files.
+      - name: Run Flutter tests
+        run: flutter test
+
+      # (Optional) 5. TESTING: Run Integration Tests
+      #    If you have integration tests in `integration_test/`
+      #    This often requires an emulator or device, so setup can be more complex.
+      # - name: Run Flutter integration tests
+      #   run: flutter test integration_test/
+
+      # (Optional) 6. BUILD (Example - usually you might have a separate workflow or job for full builds)
+      #    You could add a build step here to ensure the app compiles after tests pass.
+      # - name: Build APK (Debug)
+      #   run: flutter build apk --debug
+      # - name: Build iOS (Debug, no signing)
+      #   run: flutter build ios --debug --no-codesign
+
+      # (Optional) 7. ARTIFACTS
+      #    If you run a build step and want to save the output.
+      # - name: Upload Debug APK
+      #   if: success() # Or always()
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: debug-apk
+      #     path: build/app/outputs/flutter-apk/app-debug.apk
