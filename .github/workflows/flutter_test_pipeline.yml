@@ -25,7 +25,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2' # Specific version matching Dart SDK >=3.4.3
+          flutter-version: '3.22.3' # UPDATED: Uses Dart SDK 3.4.4, compatible with frame_msg 2.0.0
           cache: true # Enable caching of Flutter SDK and pub dependencies
 
       # (Optional) 2. SETUP ENVIRONMENT: Setup Java (if needed by any test dependencies or future build steps)
@@ -36,7 +36,7 @@ jobs:
       #     java-version: '17' # Or the version required by your Android Gradle Plugin
 
       # 3. DEPENDENCIES: Get Flutter dependencies
-      #    This step will fail if pubspec.yaml has incompatible versions.
+      #    This step will use the Dart SDK bundled with Flutter 3.22.3.
       - name: Get Flutter dependencies
         run: flutter pub get
 
