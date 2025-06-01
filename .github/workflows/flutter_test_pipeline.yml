@@ -37,19 +37,43 @@ jobs:
           java-version: '17'
 
       # 3. DEPENDENCIES: Get Flutter dependencies
+      #    This step will fail if pubspec.yaml has incompatible versions.
+      #    Ensure your pubspec.yaml is compatible with the Dart SDK from 'channel: stable' Flutter.
       - name: Get Flutter dependencies
         run: flutter pub get
 
       # 4. STATIC ANALYSIS: Check formatting
       - name: Check Dart formatting
-        run: flutter format --output=none --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed . # Using dart format
 
       # 4. STATIC ANALYSIS: Analyze Dart code
+      #    Fails if there are any analyzer issues (errors, warnings based on your analysis_options.yaml).
       - name: Analyze Dart code
         run: flutter analyze
 
-      # 5. TESTING: Run Flutter tests
+      # 5. TESTING: Run Flutter tests (unit and widget tests)
+      #    The `test/` directory should contain your test files.
       - name: Run Flutter tests
         run: flutter test
 
-      # ... (Optional integration tests, build steps, artifacts as before) ...
+      # (Optional) 5. TESTING: Run Integration Tests
+      #    If you have integration tests in `integration_test/`
+      #    This often requires an emulator or device, so setup can be more complex.
+      # - name: Run Flutter integration tests
+      #   run: flutter test integration_test/
+
+      # (Optional) 6. BUILD (Example - usually you might have a separate workflow or job for full builds)
+      #    You could add a build step here to ensure the app compiles after tests pass.
+      # - name: Build APK (Debug)
+      #   run: flutter build apk --debug
+      # - name: Build iOS (Debug, no signing)
+      #   run: flutter build ios --debug --no-codesign
+
+      # (Optional) 7. ARTIFACTS
+      #    If you run a build step and want to save the output.
+      # - name: Upload Debug APK
+      #   if: success() # Or always()
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: debug-apk
+      #     path: build/app/outputs/flutter-apk/app-debug.apk
