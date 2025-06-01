@@ -1,78 +1,55 @@
 name: Flutter CI - Test Pipeline
 
 # 1. TRIGGER: When the pipeline should run
-# Runs on pushes to the main or develop branches, and on any pull request
 on:
   push:
     branches:
       - main
       - develop
   pull_request:
-    branches: # Or target specific branches like [ main, develop ]
+    branches:
       - '*'
 
 jobs:
   test:
     name: Run Flutter Analyzer & Tests
-    runs-on: ubuntu-latest # Use a Linux runner
+    runs-on: ubuntu-latest
 
     steps:
       # 2. SETUP ENVIRONMENT: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. SETUP ENVIRONMENT: Setup Flutter
-      - name: Setup Flutter
+      # 2. SETUP ENVIRONMENT: Setup Flutter (Matches build-demo-apk.yml)
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.3' # UPDATED: Uses Dart SDK 3.4.4, compatible with frame_msg 2.0.0
-          cache: true # Enable caching of Flutter SDK and pub dependencies
+          channel: 'stable' # Uses the latest stable Flutter SDK, same as your build workflow
+          cache: true
 
-      # (Optional) 2. SETUP ENVIRONMENT: Setup Java (if needed by any test dependencies or future build steps)
-      # - name: Setup Java
-      #   uses: actions/setup-java@v3
-      #   with:
-      #     distribution: 'temurin'
-      #     java-version: '17' # Or the version required by your Android Gradle Plugin
+      # (Optional) 2. SETUP ENVIRONMENT: Setup Java
+      # Your build_demo_apk.yml uses Java 17. Adding it here for consistency if any
+      # test-related tools or future steps might need it.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       # 3. DEPENDENCIES: Get Flutter dependencies
-      #    This step will use the Dart SDK bundled with Flutter 3.22.3.
       - name: Get Flutter dependencies
         run: flutter pub get
 
       # 4. STATIC ANALYSIS: Check formatting
-      #    Fails if any files need reformatting.
       - name: Check Dart formatting
         run: flutter format --output=none --set-exit-if-changed .
 
       # 4. STATIC ANALYSIS: Analyze Dart code
-      #    Fails if there are any analyzer issues (errors, warnings based on your analysis_options.yaml).
       - name: Analyze Dart code
         run: flutter analyze
 
-      # 5. TESTING: Run Flutter tests (unit and widget tests)
-      #    The `test/` directory should contain your test files.
+      # 5. TESTING: Run Flutter tests
       - name: Run Flutter tests
         run: flutter test
 
-      # (Optional) 5. TESTING: Run Integration Tests
-      #    If you have integration tests in `integration_test/`
-      #    This often requires an emulator or device, so setup can be more complex.
-      # - name: Run Flutter integration tests
-      #   run: flutter test integration_test/
-
-      # (Optional) 6. BUILD (Example - usually you might have a separate workflow or job for full builds)
-      #    You could add a build step here to ensure the app compiles after tests pass.
-      # - name: Build APK (Debug)
-      #   run: flutter build apk --debug
-      # - name: Build iOS (Debug, no signing)
-      #   run: flutter build ios --debug --no-codesign
-
-      # (Optional) 7. ARTIFACTS
-      #    If you run a build step and want to save the output.
-      # - name: Upload Debug APK
-      #   if: success() # Or always()
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: debug-apk
-      #     path: build/app/outputs/flutter-apk/app-debug.apk
+      # ... (Optional integration tests, build steps, artifacts as before) ...
