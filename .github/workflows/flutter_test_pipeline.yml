@@ -25,9 +25,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2' # <-- UPDATED based on pubspec.yaml (Dart SDK >=3.4.3)
-          # channel: 'stable' # Can be kept if 3.22.2 is on stable, or removed.
-                           # The specific version is usually sufficient.
+          flutter-version: '3.22.2' # Specific version matching Dart SDK >=3.4.3
           cache: true # Enable caching of Flutter SDK and pub dependencies
 
       # (Optional) 2. SETUP ENVIRONMENT: Setup Java (if needed by any test dependencies or future build steps)
@@ -38,6 +36,7 @@ jobs:
       #     java-version: '17' # Or the version required by your Android Gradle Plugin
 
       # 3. DEPENDENCIES: Get Flutter dependencies
+      #    This step will fail if pubspec.yaml has incompatible versions.
       - name: Get Flutter dependencies
         run: flutter pub get
 
