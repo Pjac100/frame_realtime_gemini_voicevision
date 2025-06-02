@@ -152,8 +152,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _apiKeyController.text = prefs.getString('api_key') ?? '';
-      _systemInstructionController.text =
-          prefs.getString('system_instruction') ??
+      _systemInstructionController.text = prefs
+              .getString('system_instruction') ??
           'The stream of images are coming live from the user\'s smart glasses, they are not a recorded video. For example, don\'t say "the person in the video", say "the person in front of you" if you are referring to someone you can see in the images. If an image is blurry, don\'t say the image is too blurry, wait for subsequent images that will arrive in the coming few seconds that might stabilize focus and be easier to process.\n\nAfter the user asks a question, never restate the question but instead directly answer it. No need to start responding when the images come in, wait for the user to start talking and only refer to the live images when relevant.\n\nTry not to repeat what the user is asking unless you\'re really unsure.';
       _voiceName = GeminiVoiceName.values.firstWhere(
         (e) =>
@@ -473,14 +473,13 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                         },
                         items: GeminiVoiceName.values
                             .map<DropdownMenuItem<GeminiVoiceName>>((
-                              GeminiVoiceName value,
-                            ) {
-                              return DropdownMenuItem<GeminiVoiceName>(
-                                value: value,
-                                child: Text(value.toString().split('.').last),
-                              );
-                            })
-                            .toList(),
+                          GeminiVoiceName value,
+                        ) {
+                          return DropdownMenuItem<GeminiVoiceName>(
+                            value: value,
+                            child: Text(value.toString().split('.').last),
+                          );
+                        }).toList(),
                       ),
                     ],
                   ),
@@ -501,7 +500,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     onPressed: _savePrefs,
                     child: const Text('Save'),
                   ),
-
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -540,8 +538,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               Positioned(
                 bottom: 20,
                 right: 20,
-                child:
-                    getFloatingActionButtonWidget(
+                child: getFloatingActionButtonWidget(
                       const Icon(Icons.mic),
                       const Icon(Icons.mic_off),
                     ) ??

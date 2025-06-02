@@ -78,8 +78,8 @@ class GeminiRealtime {
     _log.info('Connecting to Gemini');
 
     // configure the session with the specified voice and system instruction
-    _setupMap['setup']['generation_config']['speech_config']['voice_config']['prebuilt_voice_config']['voice_name'] =
-        voice.name;
+    _setupMap['setup']['generation_config']['speech_config']['voice_config']
+        ['prebuilt_voice_config']['voice_name'] = voice.name;
     _setupMap['setup']['system_instruction']['parts'][0]['text'] =
         systemInstruction;
 

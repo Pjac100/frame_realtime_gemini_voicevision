@@ -24,7 +24,7 @@ class VectorDbService {
   Future<void> addEmbedding({
     required String id,
     required List<double>
-    embedding, // These will eventually be Float32List or similar for FFI
+        embedding, // These will eventually be Float32List or similar for FFI
     required Map<String, dynamic> metadata,
   }) async {
     if (!_isInitialized) {
@@ -40,7 +40,7 @@ class VectorDbService {
   Future<List<Map<String, dynamic>>> querySimilarEmbeddings({
     // Return type changed for more flexibility
     required List<double>
-    queryEmbedding, // These will eventually be Float32List or similar
+        queryEmbedding, // These will eventually be Float32List or similar
     required int topK,
   }) async {
     if (!_isInitialized) {
