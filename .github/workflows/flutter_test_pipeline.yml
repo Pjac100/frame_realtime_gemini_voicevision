@@ -26,7 +26,18 @@ jobs:
         with:
           channel: 'stable' # Uses the latest stable Flutter SDK, same as your build workflow
           cache: true
+          
+      # ... after "Set up Flutter" step ...
+      - name: Show Flutter version used in CI
+        run: flutter --version
 
+      - name: Show Dart version used in CI
+        run: dart --version # Or C:\src\flutter_windows_3.32.0-stable\flutter\bin\cache\dart-sdk\bin\dart.exe --version if flutter path issues persist for direct dart command in CI
+
+      # 3. DEPENDENCIES: Get Flutter dependencies
+      - name: Get Flutter dependencies
+        run: flutter pub get
+    # ... rest of the steps
       # (Optional) 2. SETUP ENVIRONMENT: Setup Java
       # Your build_demo_apk.yml uses Java 17. Adding it here for consistency if any
       # test-related tools or future steps might need it.
