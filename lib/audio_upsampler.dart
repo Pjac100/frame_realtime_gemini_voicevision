@@ -18,7 +18,8 @@ class AudioUpsampler {
 
       // Calculate interpolated values
       outputSamples[i * 2] = currentSample;
-      outputSamples[i * 2 + 1] = currentSample + ((nextSample - currentSample) ~/ 2);
+      outputSamples[i * 2 + 1] =
+          currentSample + ((nextSample - currentSample) ~/ 2);
     }
 
     // Handle the last sample

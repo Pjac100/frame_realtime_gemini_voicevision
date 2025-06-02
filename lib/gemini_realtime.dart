@@ -20,9 +20,38 @@ class GeminiRealtime {
   // interestingly, 'response_modalities' seems to allow only "text", "audio", "image" - not a list. Audio only is fine for us
   // Valid voices are: Puck, Charon, Kore, Fenrir, Aoede (Set to Puck, override in connect())
   // system instruction is also not set in the template map (set during connect())
-  final Map<String, dynamic> _setupMap = {'setup': { 'model': 'models/gemini-2.0-flash-live-001', 'generation_config': {'response_modalities': 'audio', 'speech_config': {'voice_config': {'prebuilt_voice_config': {'voice_name': 'Puck'}}}}, 'system_instruction': { 'parts': [ { 'text': '' } ] }}};
-  final Map<String, dynamic> _realtimeAudioInputMap = {'realtimeInput': { 'mediaChunks': [{'mimeType': 'audio/pcm;rate=16000', 'data': ''}]}};
-  final Map<String, dynamic> _realtimeImageInputMap = {'realtimeInput': { 'mediaChunks': [{'mimeType': 'image/jpeg', 'data': ''}]}};
+  final Map<String, dynamic> _setupMap = {
+    'setup': {
+      'model': 'models/gemini-2.0-flash-live-001',
+      'generation_config': {
+        'response_modalities': 'audio',
+        'speech_config': {
+          'voice_config': {
+            'prebuilt_voice_config': {'voice_name': 'Puck'},
+          },
+        },
+      },
+      'system_instruction': {
+        'parts': [
+          {'text': ''},
+        ],
+      },
+    },
+  };
+  final Map<String, dynamic> _realtimeAudioInputMap = {
+    'realtimeInput': {
+      'mediaChunks': [
+        {'mimeType': 'audio/pcm;rate=16000', 'data': ''},
+      ],
+    },
+  };
+  final Map<String, dynamic> _realtimeImageInputMap = {
+    'realtimeInput': {
+      'mediaChunks': [
+        {'mimeType': 'image/jpeg', 'data': ''},
+      ],
+    },
+  };
 
   // audio buffer
   final _audioBuffer = ListQueue<Uint8List>();
@@ -40,20 +69,30 @@ class GeminiRealtime {
   bool isConnected() => _connected;
 
   /// Connect to Gemini Live and set up the websocket connection using the specified API key
-  Future<bool> connect(String apiKey, GeminiVoiceName voice, String systemInstruction) async {
+  Future<bool> connect(
+    String apiKey,
+    GeminiVoiceName voice,
+    String systemInstruction,
+  ) async {
     eventLogger('Connecting to Gemini');
     _log.info('Connecting to Gemini');
 
     // configure the session with the specified voice and system instruction
-    _setupMap['setup']['generation_config']['speech_config']['voice_config']['prebuilt_voice_config']['voice_name'] = voice.name;
-    _setupMap['setup']['system_instruction']['parts'][0]['text'] = systemInstruction;
+    _setupMap['setup']['generation_config']['speech_config']['voice_config']['prebuilt_voice_config']['voice_name'] =
+        voice.name;
+    _setupMap['setup']['system_instruction']['parts'][0]['text'] =
+        systemInstruction;
 
     // get the audio playback ready
     _audioBuffer.clear();
 
     // get a fresh websocket channel each time we start a conversation for now
     await _channel?.sink.close();
-    _channel = WebSocketChannel.connect(Uri.parse('wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$apiKey'));
+    _channel = WebSocketChannel.connect(
+      Uri.parse(
+        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=$apiKey',
+      ),
+    );
 
     // connection doesn't complete immediately, wait until it's ready
     // TODO check what happens if API key is bad, host is bad etc, how long are the timeouts?
@@ -93,7 +132,8 @@ class GeminiRealtime {
 
     // set the data into the realtime input map before serializing
     // TODO can't I just cache the last little map and set it there at least?
-    _realtimeAudioInputMap['realtimeInput']['mediaChunks'][0]['data'] = base64audio;
+    _realtimeAudioInputMap['realtimeInput']['mediaChunks'][0]['data'] =
+        base64audio;
 
     // send data to websocket
     _channel!.sink.add(jsonEncode(_realtimeAudioInputMap));
@@ -111,7 +151,8 @@ class GeminiRealtime {
 
     // set the data into the realtime input map before serializing
     // TODO can't I just cache the last little map and set it there at least?
-    _realtimeImageInputMap['realtimeInput']['mediaChunks'][0]['data'] = base64image;
+    _realtimeImageInputMap['realtimeInput']['mediaChunks'][0]['data'] =
+        base64image;
 
     // send data to websocket
     _log.info('sending photo');
@@ -127,8 +168,7 @@ class GeminiRealtime {
   ByteData getResponseAudioByteData() {
     if (hasResponseAudio()) {
       return (_audioBuffer.removeFirst()).buffer.asByteData();
-    }
-    else {
+    } else {
       return ByteData(0);
     }
   }
@@ -157,8 +197,7 @@ class GeminiRealtime {
         // notify the main app in case playback had stopped, it should start again
         audioReadyCallback();
       }
-    }
-    else {
+    } else {
       // some other kind of event
       var serverContent = event['serverContent'];
       if (serverContent != null) {
@@ -171,25 +210,20 @@ class GeminiRealtime {
           _log.fine('Response interrupted by user');
 
           // TODO communicate interruption playback point back to server?
-        }
-        else if (serverContent['turnComplete'] != null) {
+        } else if (serverContent['turnComplete'] != null) {
           // server has finished sending
           eventLogger('Server turn complete');
-        }
-        else {
+        } else {
           eventLogger(serverContent.toString());
         }
-      }
-      else if (event['setupComplete'] != null) {
+      } else if (event['setupComplete'] != null) {
         eventLogger('Setup is complete');
         _log.info('Gemini setup is complete');
-      }
-      else {
+      } else {
         // unknown server message
         _log.info(eventString);
         eventLogger(eventString);
       }
     }
   }
-
 }

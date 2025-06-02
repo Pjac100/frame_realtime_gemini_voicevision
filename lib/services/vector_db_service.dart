@@ -14,33 +14,44 @@ class VectorDbService {
     // 2. Opening the SQLite database file.
     // 3. Potentially running initial setup SQL (e.g., PRAGMAs, creating tables if not exist).
     // For now, we just simulate it.
-    await Future.delayed(const Duration(milliseconds: 100)); // Simulate async work
+    await Future.delayed(
+      const Duration(milliseconds: 100),
+    ); // Simulate async work
     _isInitialized = true; // Mark as initialized for stub purposes
     _log.info('VectorDbService: Initialization complete (stub).');
   }
 
   Future<void> addEmbedding({
     required String id,
-    required List<double> embedding, // These will eventually be Float32List or similar for FFI
+    required List<double>
+    embedding, // These will eventually be Float32List or similar for FFI
     required Map<String, dynamic> metadata,
   }) async {
     if (!_isInitialized) {
-      _log.warning('VectorDbService: Not initialized. Call initialize() first.');
+      _log.warning(
+        'VectorDbService: Not initialized. Call initialize() first.',
+      );
       return;
     }
     _log.info('VectorDbService: Adding embedding for id: $id (stub)...');
     // Future: Convert embedding to a suitable format, prepare SQL, execute via FFI.
   }
 
-  Future<List<Map<String, dynamic>>> querySimilarEmbeddings({ // Return type changed for more flexibility
-    required List<double> queryEmbedding, // These will eventually be Float32List or similar
+  Future<List<Map<String, dynamic>>> querySimilarEmbeddings({
+    // Return type changed for more flexibility
+    required List<double>
+    queryEmbedding, // These will eventually be Float32List or similar
     required int topK,
   }) async {
     if (!_isInitialized) {
-      _log.warning('VectorDbService: Not initialized. Call initialize() first.');
+      _log.warning(
+        'VectorDbService: Not initialized. Call initialize() first.',
+      );
       return [];
     }
-    _log.info('VectorDbService: Querying for $topK similar embeddings (stub)...');
+    _log.info(
+      'VectorDbService: Querying for $topK similar embeddings (stub)...',
+    );
     // Future: Convert queryEmbedding, prepare SQL for vector search, execute, parse results.
     // Example of what results might look like:
     // return [

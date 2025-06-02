@@ -16,9 +16,7 @@ void initializeForegroundService() {
       showNotification: false,
       playSound: false,
     ),
-    foregroundTaskOptions: const ForegroundTaskOptions(
-      isOnceEvent: true,
-    ),
+    foregroundTaskOptions: const ForegroundTaskOptions(isOnceEvent: true),
   );
 }
 
