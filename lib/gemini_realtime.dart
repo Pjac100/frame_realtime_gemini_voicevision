@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'audio_data_extractor.dart';
 
+// ignore: constant_identifier_names
 enum GeminiVoiceName { Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr }
 
 class GeminiRealtime {
