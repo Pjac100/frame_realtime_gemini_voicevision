@@ -27,6 +27,7 @@ class AudioDataExtractor {
               final Uint8List decoded = base64Decode(inlineData['data']);
               audioDataList.add(decoded);
             } catch (e) {
+              // ignore: avoid_print
               print('Error decoding base64 data: $e');
               // Continue to next part if this one fails
               continue;
@@ -37,6 +38,7 @@ class AudioDataExtractor {
 
       return audioDataList.isEmpty ? null : audioDataList;
     } catch (e) {
+      // ignore: avoid_print
       print('Error parsing message: $e');
       return null;
     }
