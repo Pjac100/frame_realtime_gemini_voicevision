@@ -30,7 +30,9 @@ void main() {
       await expectLater(vectorDbService.initialize(), completes);
     });
 
-    test('addEmbedding does not throw error before initialization (logs warning)', () async {
+    test(
+        'addEmbedding does not throw error before initialization (logs warning)',
+        () async {
       await expectLater(
         vectorDbService.addEmbedding(
           id: 'test_id_uninit',
@@ -41,7 +43,9 @@ void main() {
       );
     });
 
-    test('querySimilarEmbeddings returns empty list before initialization (logs warning)', () async {
+    test(
+        'querySimilarEmbeddings returns empty list before initialization (logs warning)',
+        () async {
       final result = await vectorDbService.querySimilarEmbeddings(
         queryEmbedding: [0.1, 0.2],
         topK: 5,
@@ -62,7 +66,9 @@ void main() {
       );
     });
 
-    test('querySimilarEmbeddings returns empty list (stub behavior) after initialize', () async {
+    test(
+        'querySimilarEmbeddings returns empty list (stub behavior) after initialize',
+        () async {
       await vectorDbService.initialize();
       final result = await vectorDbService.querySimilarEmbeddings(
         queryEmbedding: [0.1, 0.2],
