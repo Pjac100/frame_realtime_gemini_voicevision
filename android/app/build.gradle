@@ -33,15 +33,22 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // kotlinOptions block for jvmTarget = '17' has been removed as per your request.
+    // The build will now use the default Kotlin JVM target.
+
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.frame_realtime_gemini_voicevision"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = 26 // raw_sound(26)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
+    }
+
+    externalNativeBuild {
+        cmake {
+            // Assumes your CMakeLists.txt is directly in the 'android/app/' directory
+            path "CMakeLists.txt"
+        }
     }
 
     buildTypes {
@@ -58,13 +65,22 @@ flutter {
 }
 
 dependencies {
-    // Your existing dependencies would be here
-    // implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    // implementation 'androidx.core:core-ktx:1.9.0'
-    // implementation 'androidx.appcompat:appcompat:1.6.1'
-    // implementation 'com.google.android.material:material:1.10.0'
-    // implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    // testImplementation 'junit:junit:4.13.2'
-    //androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    //androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    implementation(flutter.gradle.plugins.flutter.moduleDependencies.implementation)
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+    // Common AndroidX dependencies often found in Flutter projects:
+    // You might need to adjust versions or add/remove based on your specific project needs.
+    implementation 'androidx.core:core-ktx:1.9.0' // Example version, check for latest
+    implementation 'androidx.appcompat:appcompat:1.6.1' // Example version, check for latest
+    // implementation 'com.google.android.material:material:1.10.0' // Example, if you use Material components extensively in native Android
+    // implementation 'androidx.constraintlayout:constraintlayout:2.1.4' // Example, if you use ConstraintLayout
+
+    // Standard testing dependencies
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+
+    // IMPORTANT: If your original project had other specific 'implementation',
+    // 'api', 'compileOnly', 'testImplementation', or 'androidTestImplementation' lines,
+    // please ensure they are added back here.
 }
