@@ -33,9 +33,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // kotlinOptions block for jvmTarget = '17' has been removed as per your request.
-    // The build will now use the default Kotlin JVM target.
-
     defaultConfig {
         applicationId = "com.example.frame_realtime_gemini_voicevision"
         minSdk = 26 // raw_sound(26)
@@ -53,8 +50,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
         }
     }
@@ -65,17 +60,14 @@ flutter {
 }
 
 dependencies {
-    implementation(flutter.gradle.plugins.flutter.moduleDependencies.implementation)
+    // Standard Kotlin dependency
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
-    // Common AndroidX dependencies often found in Flutter projects:
-    // You might need to adjust versions or add/remove based on your specific project needs.
-    implementation 'androidx.core:core-ktx:1.9.0' // Example version, check for latest
-    implementation 'androidx.appcompat:appcompat:1.6.1' // Example version, check for latest
-    // implementation 'com.google.android.material:material:1.10.0' // Example, if you use Material components extensively in native Android
-    // implementation 'androidx.constraintlayout:constraintlayout:2.1.4' // Example, if you use ConstraintLayout
-
-    // Standard testing dependencies
+    // Standard AndroidX and testing dependencies often included in Flutter projects.
+    // Ensure these versions are appropriate for your project.
+    implementation 'androidx.core:core-ktx:1.9.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.10.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
