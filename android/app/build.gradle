@@ -43,7 +43,6 @@ android {
 
     externalNativeBuild {
         cmake {
-            // Assumes your CMakeLists.txt is directly in the 'android/app/' directory
             path "CMakeLists.txt"
         }
     }
@@ -60,19 +59,14 @@ flutter {
 }
 
 dependencies {
-    // Standard Kotlin dependency
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    // Replaced '$kotlin_version' with a specific version number to fix the build error.
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.23"
 
     // Standard AndroidX and testing dependencies often included in Flutter projects.
-    // Ensure these versions are appropriate for your project.
     implementation 'androidx.core:core-ktx:1.9.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.10.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-
-    // IMPORTANT: If your original project had other specific 'implementation',
-    // 'api', 'compileOnly', 'testImplementation', or 'androidTestImplementation' lines,
-    // please ensure they are added back here.
 }
