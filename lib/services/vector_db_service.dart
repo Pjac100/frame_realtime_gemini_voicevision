@@ -4,73 +4,39 @@ import 'dart:io' show Platform;
 import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'package.path/path.dart' as p;
 
 final _log = Logger('VectorDbService');
 
 // --- FFI Definitions ---
 final class _SQLiteDB extends Opaque {}
-
 typedef SQLiteDBPointer = Pointer<_SQLiteDB>;
-typedef _Sqlite3OpenV2Native = Int32 Function(Pointer<Utf8> filename,
-    Pointer<SQLiteDBPointer> ppDb, Int32 flags, Pointer<Utf8> zVfs);
-typedef _Sqlite3OpenV2Dart = int Function(Pointer<Utf8> filename,
-    Pointer<SQLiteDBPointer> ppDb, int flags, Pointer<Utf8> zVfs);
+typedef _Sqlite3OpenV2Native = Int32 Function(Pointer<Utf8> filename, Pointer<SQLiteDBPointer> ppDb, Int32 flags, Pointer<Utf8> zVfs);
+typedef _Sqlite3OpenV2Dart = int Function(Pointer<Utf8> filename, Pointer<SQLiteDBPointer> ppDb, int flags, Pointer<Utf8> zVfs);
 typedef _Sqlite3CloseV2Native = Int32 Function(SQLiteDBPointer pDb);
 typedef _Sqlite3CloseV2Dart = int Function(SQLiteDBPointer pDb);
 typedef _Sqlite3ErrmsgNative = Pointer<Utf8> Function(SQLiteDBPointer pDb);
 typedef _Sqlite3ErrmsgDart = Pointer<Utf8> Function(SQLiteDBPointer pDb);
 
 // --- SQLite Constants ---
-// ignore: constant_identifier_names
 const int SQLITE_OK = 0;
-// ignore: constant_identifier_names
 const int SQLITE_OPEN_READWRITE = 0x00000002;
-// ignore: constant_identifier_names
 const int SQLITE_OPEN_CREATE = 0x00000004;
 
 class VectorDbService {
   bool _isInitialized = false;
-  late final DynamicLibrary _nativeLib;
+  DynamicLibrary? _nativeLib;
   SQLiteDBPointer _db = nullptr;
 
-  late final _Sqlite3OpenV2Dart _sqlite3OpenV2;
-  late final _Sqlite3CloseV2Dart _sqlite3CloseV2;
-  late final _Sqlite3ErrmsgDart _sqlite3Errmsg;
+  late _Sqlite3OpenV2Dart _sqlite3OpenV2;
+  late _Sqlite3CloseV2Dart _sqlite3CloseV2;
+  late _Sqlite3ErrmsgDart _sqlite3Errmsg;
 
-  // <<< ADDED: A handle on the main app's event logger
   final Function(String) eventLogger;
 
-  // <<< MODIFIED: Constructor now accepts the eventLogger
+  // <<< MODIFIED: Constructor is now lean. It only stores the eventLogger.
   VectorDbService(this.eventLogger) {
-    eventLogger('VectorDB: Constructor called.');
-    try {
-      String libraryName;
-      if (Platform.isAndroid) {
-        libraryName = 'libsqlite_vector_search.so';
-      } else if (Platform.isIOS) {
-        libraryName = 'sqlite_vector_search.framework/sqlite_vector_search';
-      } else {
-        throw UnsupportedError(
-            'Platform not supported for native library loading');
-      }
-      _nativeLib = DynamicLibrary.open(libraryName);
-      eventLogger('VectorDB: Native library loaded successfully.');
-
-      _sqlite3OpenV2 =
-          _nativeLib.lookupFunction<_Sqlite3OpenV2Native, _Sqlite3OpenV2Dart>(
-              'sqlite3_open_v2');
-      _sqlite3CloseV2 =
-          _nativeLib.lookupFunction<_Sqlite3CloseV2Native, _Sqlite3CloseV2Dart>(
-              'sqlite3_close_v2');
-      _sqlite3Errmsg =
-          _nativeLib.lookupFunction<_Sqlite3ErrmsgNative, _Sqlite3ErrmsgDart>(
-              'sqlite3_errmsg');
-      eventLogger('VectorDB: SQLite functions looked up.');
-    } catch (e) {
-      eventLogger('VectorDB: FATAL ERROR in constructor: $e');
-      _log.severe('VectorDB FATAL ERROR in constructor', e);
-    }
+    // FFI setup has been moved to the initialize() method.
   }
 
   Future<void> initialize({String dbName = 'vector_database.db'}) async {
@@ -84,6 +50,26 @@ class VectorDbService {
     Pointer<SQLiteDBPointer> dbPointerPointer = nullptr;
 
     try {
+      // <<< MOVED FFI setup from constructor to here >>>
+      eventLogger('VectorDB: Loading native library...');
+      String libraryName;
+      if (Platform.isAndroid) {
+        libraryName = 'libsqlite_vector_search.so';
+      } else if (Platform.isIOS) {
+        libraryName = 'sqlite_vector_search.framework/sqlite_vector_search'; // Example for iOS
+      } else {
+        throw UnsupportedError('Platform not supported for native library loading');
+      }
+      _nativeLib = DynamicLibrary.open(libraryName);
+      eventLogger('VectorDB: Native library loaded successfully.');
+
+      // Look up the C functions from the loaded library
+      _sqlite3OpenV2 = _nativeLib!.lookupFunction<_Sqlite3OpenV2Native, _Sqlite3OpenV2Dart>('sqlite3_open_v2');
+      _sqlite3CloseV2 = _nativeLib!.lookupFunction<_Sqlite3CloseV2Native, _Sqlite3CloseV2Dart>('sqlite3_close_v2');
+      _sqlite3Errmsg = _nativeLib!.lookupFunction<_Sqlite3ErrmsgNative, _Sqlite3ErrmsgDart>('sqlite3_errmsg');
+      eventLogger('VectorDB: SQLite functions looked up.');
+      // <<< END OF MOVED FFI setup >>>
+
       final documentsDir = await getApplicationDocumentsDirectory();
       final dbPath = p.join(documentsDir.path, dbName);
       eventLogger('VectorDB: DB path is $dbPath');
@@ -102,8 +88,7 @@ class VectorDbService {
       if (openResult != SQLITE_OK) {
         String errorMsg = "VectorDB: Failed to open DB. Code: $openResult";
         if (dbPointerPointer.value != nullptr) {
-          final Pointer<Utf8> errMessageC =
-              _sqlite3Errmsg(dbPointerPointer.value);
+          final Pointer<Utf8> errMessageC = _sqlite3Errmsg(dbPointerPointer.value);
           if (errMessageC != nullptr) {
             errorMsg += ": ${errMessageC.toDartString()}";
           }
@@ -117,8 +102,7 @@ class VectorDbService {
 
       if (_db == nullptr) {
         eventLogger('VectorDB: open returned OK but DB pointer is null.');
-        throw Exception(
-            'Failed to open SQLite database: received null pointer despite SQLITE_OK.');
+        throw Exception('Failed to open SQLite database: received null pointer despite SQLITE_OK.');
       }
 
       _isInitialized = true;
@@ -140,12 +124,10 @@ class VectorDbService {
     required Map<String, dynamic> metadata,
   }) async {
     if (!_isInitialized || _db == nullptr) {
-      _log.warning(
-          'VectorDbService: Not initialized or database not open. Call initialize() first.');
+      _log.warning('VectorDbService: Not initialized or database not open. Call initialize() first.');
       return;
     }
-    _log.info(
-        'VectorDbService: addEmbedding called for id: $id (FFI not yet fully implemented)...');
+    _log.info('VectorDbService: addEmbedding called for id: $id (FFI not yet fully implemented)...');
   }
 
   Future<List<Map<String, dynamic>>> querySimilarEmbeddings({
@@ -153,12 +135,10 @@ class VectorDbService {
     required int topK,
   }) async {
     if (!_isInitialized || _db == nullptr) {
-      _log.warning(
-          'VectorDbService: Not initialized or database not open. Call initialize() first.');
+      _log.warning('VectorDbService: Not initialized or database not open. Call initialize() first.');
       return [];
     }
-    _log.info(
-        'VectorDbService: querySimilarEmbeddings called (FFI not yet fully implemented)...');
+    _log.info('VectorDbService: querySimilarEmbeddings called (FFI not yet fully implemented)...');
     return [];
   }
 
@@ -172,12 +152,10 @@ class VectorDbService {
 
     if (closeResult != SQLITE_OK) {
       eventLogger('VectorDB: Error closing DB. Code: $closeResult');
-      _log.warning(
-          'VectorDbService: Error closing database. SQLite error code: $closeResult');
+      _log.warning('VectorDbService: Error closing database. SQLite error code: $closeResult');
     } else {
       eventLogger('VectorDB: Native DB disposed successfully.');
-      _log.info(
-          'VectorDbService: Native SQLite database disposed successfully.');
+      _log.info('VectorDbService: Native SQLite database disposed successfully.');
     }
 
     _isInitialized = false;
