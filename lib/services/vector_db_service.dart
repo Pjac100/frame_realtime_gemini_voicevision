@@ -29,13 +29,6 @@ typedef _Sqlite3ErrmsgDart = Pointer<Utf8> Function(SQLiteDBPointer pDb);
 
 // <<< ADDED: FFI definitions for sqlite3_exec and sqlite3_free >>>
 // sqlite3_exec
-// SQLITE_API int sqlite3_exec(
-//   sqlite3*,                                  /* An open database */
-//   const char *sql,                           /* SQL to be evaluated */
-//   int (*callback)(void*,int,char**,char**),  /* Callback function */
-//   void *,                                    /* 1st argument to callback */
-//   char **errmsg                              /* Error msg written here */
-// );
 typedef _Sqlite3ExecNative = Int32 Function(
     SQLiteDBPointer pDb,
     Pointer<Utf8> sql,
@@ -50,7 +43,6 @@ typedef _Sqlite3ExecDart = int Function(
     Pointer<Pointer<Utf8>> pzErrMsg);
 
 // sqlite3_free
-// SQLITE_API void sqlite3_free(void*);
 typedef _Sqlite3FreeNative = Void Function(Pointer<Void> p);
 typedef _Sqlite3FreeDart = void Function(Pointer<Void> p);
 
@@ -185,8 +177,8 @@ class VectorDbService {
     // Check and create tables if they don't exist yet
     await _createTables();
 
-    _log.info(
-        'VectorDbService: addEmbedding called for id: $id (Insertion FFI not yet implemented)...');
+    eventLogger(
+        'VectorDB: addEmbedding called for id: $id. (Insertion not yet implemented)');
     // TODO: Implement FFI calls to insert vector and metadata.
   }
 
@@ -197,7 +189,7 @@ class VectorDbService {
     eventLogger('VectorDB: Checking/Creating tables...');
 
     // NOTE: You must decide on the dimensions for your vectors.
-    // This example uses 384, a common size for sentence-transformer models.
+    // This example uses 384, a common size for many embedding models.
     const sqlCreateEmbeddingsTable =
         'CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING sqlitevec(embedding FLOAT[384]);';
 
