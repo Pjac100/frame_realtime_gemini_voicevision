@@ -20,7 +20,8 @@ import 'package:frame_msg/tx/plain_text.dart'; //
 import 'package:simple_frame_app/simple_frame_app.dart'; //
 import 'foreground_service.dart'; //
 
-void main() { //
+void main() {
+  //
   // Set up Android foreground service
   initializeForegroundService(); //
 
@@ -32,7 +33,8 @@ void main() { //
 
 final _log = Logger("MainApp"); //
 
-class MainApp extends StatefulWidget { //
+class MainApp extends StatefulWidget {
+  //
   const MainApp({super.key}); //
 
   @override
@@ -40,7 +42,8 @@ class MainApp extends StatefulWidget { //
 }
 
 /// SimpleFrameAppState mixin helps to manage the lifecycle of the Frame connection outside of this file
-class MainAppState extends State<MainApp> with SimpleFrameAppState { //
+class MainAppState extends State<MainApp> with SimpleFrameAppState {
+  //
   /// realtime voice application members
   late final GeminiRealtime _gemini; //
   late final VectorDbService _vectorDbService; //
@@ -64,7 +67,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   static const resolution = 720; //
   static const qualityIndex = 4; //
   static const qualityLevel = 'VERY_HIGH'; //
-  final RxPhoto _rxPhoto = RxPhoto( //
+  final RxPhoto _rxPhoto = RxPhoto(
+    //
     quality: qualityLevel, //
     resolution: resolution, //
   );
@@ -82,7 +86,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   static const _textStyle = TextStyle(fontSize: 20); //
   String? _errorMsg; //
 
-  MainAppState() { //
+  MainAppState() {
+    //
     // filter logging
     hierarchicalLoggingEnabled = true; //
     Logger.root.level = Level.FINE; //
@@ -91,8 +96,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
     Logger('RxAudio').level = Level.FINE; //
     Logger('RxTap').level = Level.FINE; //
 
-    Logger.root.onRecord.listen((record) { //
-      debugPrint( //
+    Logger.root.onRecord.listen((record) {
+      //
+      debugPrint(
+        //
         '${record.level.name}: [${record.loggerName}] ${record.time}: ${record.message}', // ${record.time}: ${record.message}',"]
       );
     });
@@ -102,13 +109,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   }
 
   @override
-  void initState() { //
+  void initState() {
+    //
     super.initState(); //
 
     _asyncInit(); //
   }
 
-  Future<void> _asyncInit() async { //
+  Future<void> _asyncInit() async {
+    //
     // load up the saved text field data
     await _loadPrefs(); //
 
@@ -128,10 +137,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   }
 
   // ... (onFeed method remains unchanged) ...
-  void _onFeed(int remainingFrames) async { if (remainingFrames < 2000) { if (_gemini.hasResponseAudio()) { await FlutterPcmSound.feed( PcmArrayInt16(bytes: _gemini.getResponseAudioByteData()), ); } else { _log.fine('Response audio ended'); _playingAudio = false; } } }
+  void _onFeed(int remainingFrames) async {
+    if (remainingFrames < 2000) {
+      if (_gemini.hasResponseAudio()) {
+        await FlutterPcmSound.feed(
+          PcmArrayInt16(bytes: _gemini.getResponseAudioByteData()),
+        );
+      } else {
+        _log.fine('Response audio ended');
+        _playingAudio = false;
+      }
+    }
+  }
 
   @override
-  Future<void> dispose() async { //
+  Future<void> dispose() async {
+    //
     await _gemini.disconnect(); //
     await _frameAudioSubs?.cancel(); //
     await FlutterPcmSound.release(); //
@@ -141,34 +162,207 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   }
 
   // ... (loadPrefs and savePrefs methods remain unchanged) ...
-  Future<void> _loadPrefs() async { final prefs = await SharedPreferences.getInstance(); setState(() { _apiKeyController.text = prefs.getString('api_key') ?? ''; _systemInstructionController.text = prefs .getString('system_instruction') ?? 'The stream of images are coming live from the user\'s smart glasses, they are not a recorded video. For example, don\'t say "the person in the video", say "the person in front of you" if you are referring to someone you can see in the images. If an image is blurry, don\'t say the image is too blurry, wait for subsequent images that will arrive in the coming few seconds that might stabilize focus and be easier to process.\n\nAfter the user asks a question, never restate the question but instead directly answer it. No need to start responding when the images come in, wait for the user to start talking and only refer to the live images when relevant.\n\nTry not to repeat what the user is asking unless you\'re really unsure.'; _voiceName = GeminiVoiceName.values.firstWhere( (e) => e.toString().split('.').last == (prefs.getString('voice_name') ?? 'Puck'), orElse: () => GeminiVoiceName.Puck, ); }); }
-  Future<void> _savePrefs() async { final prefs = await SharedPreferences.getInstance(); await prefs.setString('api_key', _apiKeyController.text); await prefs.setString( 'system_instruction', _systemInstructionController.text, ); await prefs.setString('voice_name', _voiceName.name); }
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _apiKeyController.text = prefs.getString('api_key') ?? '';
+      _systemInstructionController.text = prefs
+              .getString('system_instruction') ??
+          'The stream of images are coming live from the user\'s smart glasses, they are not a recorded video. For example, don\'t say "the person in the video", say "the person in front of you" if you are referring to someone you can see in the images. If an image is blurry, don\'t say the image is too blurry, wait for subsequent images that will arrive in the coming few seconds that might stabilize focus and be easier to process.\n\nAfter the user asks a question, never restate the question but instead directly answer it. No need to start responding when the images come in, wait for the user to start talking and only refer to the live images when relevant.\n\nTry not to repeat what the user is asking unless you\'re really unsure.';
+      _voiceName = GeminiVoiceName.values.firstWhere(
+        (e) =>
+            e.toString().split('.').last ==
+            (prefs.getString('voice_name') ?? 'Puck'),
+        orElse: () => GeminiVoiceName.Puck,
+      );
+    });
+  }
 
+  Future<void> _savePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_key', _apiKeyController.text);
+    await prefs.setString(
+      'system_instruction',
+      _systemInstructionController.text,
+    );
+    await prefs.setString('voice_name', _voiceName.name);
+  }
 
   // ... (run, cancel, _startFrameStreaming, _stopFrameStreaming, _requestPhoto,
   //      _handleFrameAudio, _handleFramePhoto, _audioReadyCallback methods remain unchanged) ...
-  @override Future<void> run() async { _errorMsg = null; if (_apiKeyController.text.isEmpty) { setState(() { _errorMsg = 'Error: Set value for Gemini API Key'; }); return; } await _gemini.connect( _apiKeyController.text, _voiceName, _systemInstructionController.text, ); if (!_gemini.isConnected()) { _log.severe('Connection to Gemini failed'); return; } setState(() { currentState = ApplicationState.running; }); try { _tapSubs?.cancel(); _tapSubs = RxTap().attach(frame!.dataResponse).listen((taps) async { _log.info('taps: $taps'); if (_gemini.isConnected()) { if (taps >= 2) { if (!_streaming) { await _startFrameStreaming(); await frame!.sendMessage( 0x0b, TxPlainText(text: '\u{F0010}').pack(), ); } else { await _stopFrameStreaming(); await frame!.sendMessage( 0x0b, TxPlainText(text: 'Double-Tap to resume!').pack(), ); } } } else { _appendEvent('Disconnected from Gemini'); _stopFrameStreaming(); setState(() { currentState = ApplicationState.ready; }); } }); await frame!.sendMessage(0x10, TxCode(value: 1).pack()); await frame!.sendMessage( 0x0b, TxPlainText(text: 'Double-Tap to begin!').pack(), ); } catch (e) { _errorMsg = 'Error executing application logic: $e'; _log.fine(_errorMsg); setState(() { currentState = ApplicationState.ready; }); } }
-  @override Future<void> cancel() async { setState(() { currentState = ApplicationState.canceling; }); _tapSubs?.cancel(); if (_streaming) _stopFrameStreaming(); await frame!.sendMessage(0x30, TxCode(value: 0).pack()); await frame!.sendMessage(0x10, TxCode(value: 0).pack()); await frame!.sendMessage(0x0b, TxPlainText(text: ' ').pack()); await _gemini.disconnect(); setState(() { currentState = ApplicationState.ready; }); }
-  Future<void> _startFrameStreaming() async { _appendEvent('Starting Frame Streaming'); FlutterPcmSound.start(); _streaming = true; try { _frameAudioSampleStream = _rxAudio.attach(frame!.dataResponse); _frameAudioSubs?.cancel(); _frameAudioSubs = _frameAudioSampleStream!.listen(_handleFrameAudio); await frame!.sendMessage(0x30, TxCode(value: 1).pack()); await _requestPhoto(); _photoTimer = Timer.periodic(const Duration(seconds: photoInterval), ( timer, ) async { _log.info('Timer Fired!'); if (!_streaming) { timer.cancel(); _photoTimer = null; _log.info('Streaming ended, stop requesting photos'); return; } await _requestPhoto(); }); } catch (e) { _log.warning(() => 'Error executing application logic: $e'); } }
-  Future<void> _stopFrameStreaming() async { _streaming = false; _gemini.stopResponseAudio(); _photoTimer?.cancel(); _photoTimer = null; await frame!.sendMessage(0x30, TxCode(value: 0).pack()); _rxAudio.detach(); _appendEvent('Ending Frame Streaming'); }
-  Future<void> _requestPhoto() async { _log.info('requesting photo from Frame'); _photoStream = _rxPhoto.attach(frame!.dataResponse); _photoSubs?.cancel(); _photoSubs = _photoStream!.listen(_handleFramePhoto); await frame!.sendMessage( 0x0d, TxCaptureSettings( resolution: resolution, qualityIndex: qualityIndex, ).pack(), ); }
-  void _handleFrameAudio(Uint8List pcm16x8) { if (_gemini.isConnected()) { var pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8); _gemini.sendAudio(pcm16x16); } }
-  void _handleFramePhoto(Uint8List jpegBytes) { _log.info('photo received from Frame'); if (_gemini.isConnected()) { _gemini.sendPhoto(jpegBytes); } setState(() { _image = Image.memory(jpegBytes, gaplessPlayback: true); }); }
-  void _audioReadyCallback() { if (!_playingAudio) { _playingAudio = true; _onFeed(0); _log.fine('Response audio started'); } }
+  @override
+  Future<void> run() async {
+    _errorMsg = null;
+    if (_apiKeyController.text.isEmpty) {
+      setState(() {
+        _errorMsg = 'Error: Set value for Gemini API Key';
+      });
+      return;
+    }
+    await _gemini.connect(
+      _apiKeyController.text,
+      _voiceName,
+      _systemInstructionController.text,
+    );
+    if (!_gemini.isConnected()) {
+      _log.severe('Connection to Gemini failed');
+      return;
+    }
+    setState(() {
+      currentState = ApplicationState.running;
+    });
+    try {
+      _tapSubs?.cancel();
+      _tapSubs = RxTap().attach(frame!.dataResponse).listen((taps) async {
+        _log.info('taps: $taps');
+        if (_gemini.isConnected()) {
+          if (taps >= 2) {
+            if (!_streaming) {
+              await _startFrameStreaming();
+              await frame!.sendMessage(
+                0x0b,
+                TxPlainText(text: '\u{F0010}').pack(),
+              );
+            } else {
+              await _stopFrameStreaming();
+              await frame!.sendMessage(
+                0x0b,
+                TxPlainText(text: 'Double-Tap to resume!').pack(),
+              );
+            }
+          }
+        } else {
+          _appendEvent('Disconnected from Gemini');
+          _stopFrameStreaming();
+          setState(() {
+            currentState = ApplicationState.ready;
+          });
+        }
+      });
+      await frame!.sendMessage(0x10, TxCode(value: 1).pack());
+      await frame!.sendMessage(
+        0x0b,
+        TxPlainText(text: 'Double-Tap to begin!').pack(),
+      );
+    } catch (e) {
+      _errorMsg = 'Error executing application logic: $e';
+      _log.fine(_errorMsg);
+      setState(() {
+        currentState = ApplicationState.ready;
+      });
+    }
+  }
 
+  @override
+  Future<void> cancel() async {
+    setState(() {
+      currentState = ApplicationState.canceling;
+    });
+    _tapSubs?.cancel();
+    if (_streaming) _stopFrameStreaming();
+    await frame!.sendMessage(0x30, TxCode(value: 0).pack());
+    await frame!.sendMessage(0x10, TxCode(value: 0).pack());
+    await frame!.sendMessage(0x0b, TxPlainText(text: ' ').pack());
+    await _gemini.disconnect();
+    setState(() {
+      currentState = ApplicationState.ready;
+    });
+  }
+
+  Future<void> _startFrameStreaming() async {
+    _appendEvent('Starting Frame Streaming');
+    FlutterPcmSound.start();
+    _streaming = true;
+    try {
+      _frameAudioSampleStream = _rxAudio.attach(frame!.dataResponse);
+      _frameAudioSubs?.cancel();
+      _frameAudioSubs = _frameAudioSampleStream!.listen(_handleFrameAudio);
+      await frame!.sendMessage(0x30, TxCode(value: 1).pack());
+      await _requestPhoto();
+      _photoTimer = Timer.periodic(const Duration(seconds: photoInterval), (
+        timer,
+      ) async {
+        _log.info('Timer Fired!');
+        if (!_streaming) {
+          timer.cancel();
+          _photoTimer = null;
+          _log.info('Streaming ended, stop requesting photos');
+          return;
+        }
+        await _requestPhoto();
+      });
+    } catch (e) {
+      _log.warning(() => 'Error executing application logic: $e');
+    }
+  }
+
+  Future<void> _stopFrameStreaming() async {
+    _streaming = false;
+    _gemini.stopResponseAudio();
+    _photoTimer?.cancel();
+    _photoTimer = null;
+    await frame!.sendMessage(0x30, TxCode(value: 0).pack());
+    _rxAudio.detach();
+    _appendEvent('Ending Frame Streaming');
+  }
+
+  Future<void> _requestPhoto() async {
+    _log.info('requesting photo from Frame');
+    _photoStream = _rxPhoto.attach(frame!.dataResponse);
+    _photoSubs?.cancel();
+    _photoSubs = _photoStream!.listen(_handleFramePhoto);
+    await frame!.sendMessage(
+      0x0d,
+      TxCaptureSettings(
+        resolution: resolution,
+        qualityIndex: qualityIndex,
+      ).pack(),
+    );
+  }
+
+  void _handleFrameAudio(Uint8List pcm16x8) {
+    if (_gemini.isConnected()) {
+      var pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8);
+      _gemini.sendAudio(pcm16x16);
+    }
+  }
+
+  void _handleFramePhoto(Uint8List jpegBytes) {
+    _log.info('photo received from Frame');
+    if (_gemini.isConnected()) {
+      _gemini.sendPhoto(jpegBytes);
+    }
+    setState(() {
+      _image = Image.memory(jpegBytes, gaplessPlayback: true);
+    });
+  }
+
+  void _audioReadyCallback() {
+    if (!_playingAudio) {
+      _playingAudio = true;
+      _onFeed(0);
+      _log.fine('Response audio started');
+    }
+  }
 
   /// puts some text into our scrolling log in the UI
-  void _appendEvent(String evt) { //
-    setState(() { //
+  void _appendEvent(String evt) {
+    //
+    setState(() {
+      //
       _eventLog.add(evt); //
     });
     _scrollToBottom(); //
   }
 
-  void _scrollToBottom() { //
-    WidgetsBinding.instance.addPostFrameCallback((_) { //
-      if (_eventLogController.hasClients) { //
-        _eventLogController.animateTo( //
+  void _scrollToBottom() {
+    //
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      //
+      if (_eventLogController.hasClients) {
+        //
+        _eventLogController.animateTo(
+          //
           _eventLogController.position.maxScrollExtent, //
           duration: const Duration(milliseconds: 300), //
           curve: Curves.easeOut, //
@@ -178,47 +372,66 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
   }
 
   @override
-  Widget build(BuildContext context) { //
+  Widget build(BuildContext context) {
+    //
     startForegroundService(); //
-    return WithForegroundTask( //
-      child: MaterialApp( //
+    return WithForegroundTask(
+      //
+      child: MaterialApp(
+        //
         title: 'Frame Realtime Gemini Voice and Vision', //
         theme: ThemeData.dark(), //
-        home: Scaffold( //
-          appBar: AppBar( //
+        home: Scaffold(
+          //
+          appBar: AppBar(
+            //
             title: const Text('Frame Realtime Gemini Voice and Vision'), //
             actions: [getBatteryWidget()], //,"]
           ),
-          body: Center( //
-            child: Container( //
+          body: Center(
+            //
+            child: Container(
+              //
               margin: const EdgeInsets.symmetric(horizontal: 16), //
-              child: Column( //
+              child: Column(
+                //
                 mainAxisAlignment: MainAxisAlignment.start, //
                 crossAxisAlignment: CrossAxisAlignment.end, //
-                children: [ //
-                  Row( //
-                    children: [ //
-                      Expanded( //
-                        child: TextField( //
+                children: [
+                  //
+                  Row(
+                    //
+                    children: [
+                      //
+                      Expanded(
+                        //
+                        child: TextField(
+                          //
                           controller: _apiKeyController, //
-                          decoration: const InputDecoration( //
+                          decoration: const InputDecoration(
+                            //
                             hintText: 'Enter Gemini API Key', //
                           ),
                         ),
                       ),
                       const SizedBox(width: 10), //
-                      DropdownButton<GeminiVoiceName>( //
+                      DropdownButton<GeminiVoiceName>(
+                        //
                         value: _voiceName, //
-                        onChanged: (GeminiVoiceName? newValue) { //
-                          setState(() { //
+                        onChanged: (GeminiVoiceName? newValue) {
+                          //
+                          setState(() {
+                            //
                             _voiceName = newValue!; //
                           });
                         },
                         items: GeminiVoiceName.values //
-                            .map<DropdownMenuItem<GeminiVoiceName>>(( //
-                            GeminiVoiceName value, //
-                            ) {
-                          return DropdownMenuItem<GeminiVoiceName>( //
+                            .map<DropdownMenuItem<GeminiVoiceName>>((
+                          //
+                          GeminiVoiceName value, //
+                        ) {
+                          return DropdownMenuItem<GeminiVoiceName>(
+                            //
                             value: value, //
                             child: Text(value.toString().split('.').last), //
                           );
@@ -227,15 +440,18 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
                     ],
                   ),
                   const SizedBox(height: 10), //
-                  TextField( //
+                  TextField(
+                    //
                     controller: _systemInstructionController, //
                     maxLines: 3, //
-                    decoration: const InputDecoration( //
+                    decoration: const InputDecoration(
+                      //
                       hintText: 'System Instruction', //
                     ),
                   ),
                   if (_errorMsg != null) //
-                    Text( //
+                    Text(
+                      //
                       _errorMsg!, //
                       style: const TextStyle(backgroundColor: Colors.red), //
                     ),
@@ -250,9 +466,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
                           _appendEvent('Testing addEmbedding...');
                           _vectorDbService.addEmbedding(
                               id: 'test1',
-                              embedding: List.filled(384, 0.1), // Dummy 384-dim vector
-                              metadata: {'source': 'manual_test'}
-                          );
+                              embedding:
+                                  List.filled(384, 0.1), // Dummy 384-dim vector
+                              metadata: {'source': 'manual_test'});
                         },
                         child: const Text('Test DB'),
                       ),
@@ -273,7 +489,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
                         Expanded(
                           child: ListView.builder(
                             controller:
-                            _eventLogController, // Auto-scroll controller
+                                _eventLogController, // Auto-scroll controller
                             itemCount: _eventLog.length,
                             itemBuilder: (context, index) {
                               return Text(_eventLog[index], style: _textStyle);
@@ -287,26 +503,33 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState { //
               ),
             ),
           ),
-          floatingActionButton: Stack( //
-            children: [ //
+          floatingActionButton: Stack(
+            //
+            children: [
+              //
               if (_eventLog.isNotEmpty) //
-                Positioned( //
+                Positioned(
+                  //
                   bottom: 90, //
                   right: 20, //
-                  child: FloatingActionButton( //
-                    onPressed: () { //
+                  child: FloatingActionButton(
+                    //
+                    onPressed: () {
+                      //
                       Share.share(_eventLog.join('\n')); //
                     },
                     child: const Icon(Icons.share), //
                   ),
                 ),
-              Positioned( //
+              Positioned(
+                //
                 bottom: 20, //
                 right: 20, //
-                child: getFloatingActionButtonWidget( //
-                  const Icon(Icons.mic), //
-                  const Icon(Icons.mic_off), //
-                ) ?? //
+                child: getFloatingActionButtonWidget(
+                      //
+                      const Icon(Icons.mic), //
+                      const Icon(Icons.mic_off), //
+                    ) ?? //
                     Container(), //
               ),
             ],
