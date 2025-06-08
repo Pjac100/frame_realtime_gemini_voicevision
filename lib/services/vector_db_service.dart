@@ -46,6 +46,14 @@ typedef _Sqlite3ExecDart = int Function(
 typedef _Sqlite3FreeNative = Void Function(Pointer<Void> p);
 typedef _Sqlite3FreeDart = void Function(Pointer<Void> p);
 
+// sqlite3_auto_extension
+typedef _Sqlite3AutoExtNative = Int32 Function(Pointer<NativeFunction<Void Function()>> xEntryPoint);
+typedef _Sqlite3AutoExtDart = int Function(Pointer<NativeFunction<Void Function()>> xEntryPoint);
+
+// sqlite3_cancel_auto_extension
+typedef _Sqlite3CancelAutoExtNative = Int32 Function(Pointer<NativeFunction<Void Function()>> xEntryPoint);
+typedef _Sqlite3CancelAutoExtDart = int Function(Pointer<NativeFunction<Void Function()>> xEntryPoint);
+
 // --- SQLite Constants ---
 const int SQLITE_OK = 0;
 const int SQLITE_OPEN_READWRITE = 0x00000002;
@@ -63,6 +71,9 @@ class VectorDbService {
   late _Sqlite3ErrmsgDart _sqlite3Errmsg;
   late _Sqlite3ExecDart _sqlite3Exec; // <<< ADDED
   late _Sqlite3FreeDart _sqlite3Free; // <<< ADDED
+  late _Sqlite3AutoExtDart _sqlite3AutoExt;
+  late _Sqlite3CancelAutoExtDart _sqlite3CancelAutoExt;
+  late Pointer<NativeFunction<Void Function()>> _vecInitPtr;
 
   final Function(String) eventLogger;
 
@@ -110,7 +121,22 @@ class VectorDbService {
       _sqlite3Free = _nativeLib!
           .lookupFunction<_Sqlite3FreeNative, _Sqlite3FreeDart>('sqlite3_free');
 
+      _sqlite3AutoExt = _nativeLib!
+          .lookupFunction<_Sqlite3AutoExtNative, _Sqlite3AutoExtDart>('sqlite3_auto_extension');
+      _sqlite3CancelAutoExt = _nativeLib!
+          .lookupFunction<_Sqlite3CancelAutoExtNative, _Sqlite3CancelAutoExtDart>('sqlite3_cancel_auto_extension');
+      _vecInitPtr =
+          _nativeLib!.lookup<NativeFunction<Void Function()>>('sqlite3_vec_init');
+
       eventLogger('VectorDB: SQLite functions looked up.');
+
+      final autoExtResult = _sqlite3AutoExt(_vecInitPtr);
+      if (autoExtResult != SQLITE_OK) {
+        eventLogger('VectorDB: Failed to register sqlitevec extension. Code: '
+            '$autoExtResult');
+      } else {
+        eventLogger('VectorDB: sqlitevec extension registered.');
+      }
 
       final documentsDir = await getApplicationDocumentsDirectory();
       final dbPath = p.join(documentsDir.path, dbName);
@@ -262,6 +288,7 @@ class VectorDbService {
       return;
     }
     eventLogger('VectorDB: Disposing native database...');
+    _sqlite3CancelAutoExt(_vecInitPtr);
     final closeResult = _sqlite3CloseV2(_db);
 
     if (closeResult != SQLITE_OK) {
