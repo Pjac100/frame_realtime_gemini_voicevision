@@ -9611,7 +9611,7 @@ static sqlite3_module vec_static_blob_entriesModule = {
   "Commit: " SQLITE_VEC_SOURCE "\n"                                            \
   "Build flags: " SQLITE_VEC_DEBUG_BUILD
 
-SQLITE_VEC_API int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
+__attribute__((visibility("default"))) int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg,
                                     const sqlite3_api_routines *pApi) {
 #ifndef SQLITE_CORE
   SQLITE_EXTENSION_INIT2(pApi);
