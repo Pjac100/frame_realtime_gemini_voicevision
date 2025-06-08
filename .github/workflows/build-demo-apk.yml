@@ -4,10 +4,10 @@ name: Build Frame Vision Gemini Demo APK
 on:
   push:
     branches:
-      - main # Or your primary development branch (e.g., master, develop)
+      - temp-stable-build # CHANGED: Now triggers on your current default branch
   pull_request:
     branches:
-      - main # Or your primary development branch
+      - temp-stable-build # CHANGED: Now triggers for PRs against your branch
   workflow_dispatch: # Allows you to trigger this workflow manually from the Actions tab
 
 jobs:
@@ -31,16 +31,13 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable' # Uses the latest stable Flutter SDK.
-                            # Change to 'beta', 'dev', or a specific version (e.g., '3.22.0')
-                            # if your project requires it.
+          channel: 'stable'
 
       # 4. Install Flutter project dependencies
       - name: Install Flutter dependencies
         run: flutter pub get
 
       # 5. Ensure android/gradlew is executable (good practice)
-      # Flutter uses this script to run Gradle tasks for the Android build.
       - name: Ensure gradlew is executable
         run: |
           if [ -f "android/gradlew" ]; then
@@ -49,15 +46,15 @@ jobs:
             echo "android/gradlew not found, skipping chmod. Flutter build will attempt to proceed."
           fi
 
-      # 6. Build the debug APK
+      # 6. NEW: Clean the project before building
+      - name: Clean Flutter build cache
+        run: flutter clean
+
+      # 7. Build the debug APK
       - name: Build Debug APK
         run: flutter build apk --debug
-        # If you encounter build failures due to Android Gradle Plugin (AGP) or Kotlin
-        # version warnings from Flutter, you can try adding this flag:
-        # run: flutter build apk --debug --android-skip-build-dependency-validation
 
-      # 7. Upload the generated APK as an artifact
-      # This makes the APK downloadable from the workflow run's summary page.
+      # 8. Upload the generated APK as an artifact
       - name: Upload Demo APK Artifact
         uses: actions/upload-artifact@v4
         with:
