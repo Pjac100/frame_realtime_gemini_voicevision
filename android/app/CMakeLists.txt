@@ -25,6 +25,14 @@ add_library(${LIBRARY_NAME} SHARED
         ${SQLITE_SOURCES_DIR}/sqlite-vec.c
 )
 
+# Build sqlite-vec directly into SQLite and enable extension support
+target_compile_definitions(
+    ${LIBRARY_NAME}
+    PRIVATE
+    SQLITE_CORE
+    SQLITE_OMIT_LOAD_EXTENSION=0
+)
+
 # --- Compile Definitions for SQLite (Optional but often needed) ---
 # Refer to SQLite and sqlite-vec documentation if you encounter issues or need
 # specific features enabled. For example, if sqlite-vec requires specific
