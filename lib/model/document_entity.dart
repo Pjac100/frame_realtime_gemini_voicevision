@@ -19,7 +19,7 @@ class Document {
     dimensions: 384,
     // COSINE distance is often best for semantic similarity.
     // Other options include EUCLIDEAN and DOT_PRODUCT.
-    distanceType: VectorDistanceType.COSINE,
+    distanceType: VectorDistanceType.cosine,
   )
   List<double>? embedding;
 
