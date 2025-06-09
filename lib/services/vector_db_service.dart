@@ -1,280 +1,81 @@
 // lib/services/vector_db_service.dart
-import 'dart:ffi';
-import 'dart:io' show Platform;
-import 'package:ffi/ffi.dart';
 import 'package:logging/logging.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+
+// Import the main app file to get access to the global 'store'.
+import '../main.dart';
+// Import the entity model we created.
+import '../model/document_entity.dart';
+// Import the generated ObjectBox code.
+import '../objectbox.g.dart';
 
 final _log = Logger('VectorDbService');
 
-// --- FFI Definitions ---
-final class _SQLiteDB extends Opaque {}
-
-typedef SQLiteDBPointer = Pointer<_SQLiteDB>;
-
-// sqlite3_open_v2
-typedef _Sqlite3OpenV2Native = Int32 Function(Pointer<Utf8> filename,
-    Pointer<SQLiteDBPointer> ppDb, Int32 flags, Pointer<Utf8> zVfs);
-typedef _Sqlite3OpenV2Dart = int Function(Pointer<Utf8> filename,
-    Pointer<SQLiteDBPointer> ppDb, int flags, Pointer<Utf8> zVfs);
-
-// sqlite3_close_v2
-typedef _Sqlite3CloseV2Native = Int32 Function(SQLiteDBPointer pDb);
-typedef _Sqlite3CloseV2Dart = int Function(SQLiteDBPointer pDb);
-
-// sqlite3_errmsg
-typedef _Sqlite3ErrmsgNative = Pointer<Utf8> Function(SQLiteDBPointer pDb);
-typedef _Sqlite3ErrmsgDart = Pointer<Utf8> Function(SQLiteDBPointer pDb);
-
-// <<< ADDED: FFI definitions for sqlite3_exec and sqlite3_free >>>
-// sqlite3_exec
-typedef _Sqlite3ExecNative = Int32 Function(
-    SQLiteDBPointer pDb,
-    Pointer<Utf8> sql,
-    Pointer<Void> callback,
-    Pointer<Void> pArg,
-    Pointer<Pointer<Utf8>> pzErrMsg);
-typedef _Sqlite3ExecDart = int Function(
-    SQLiteDBPointer pDb,
-    Pointer<Utf8> sql,
-    Pointer<Void> callback,
-    Pointer<Void> pArg,
-    Pointer<Pointer<Utf8>> pzErrMsg);
-
-// sqlite3_free
-typedef _Sqlite3FreeNative = Void Function(Pointer<Void> p);
-typedef _Sqlite3FreeDart = void Function(Pointer<Void> p);
-
-// --- SQLite Constants ---
-const int SQLITE_OK = 0;
-const int SQLITE_OPEN_READWRITE = 0x00000002;
-const int SQLITE_OPEN_CREATE = 0x00000004;
-
 class VectorDbService {
-  bool _isInitialized = false;
-  DynamicLibrary? _nativeLib;
-  SQLiteDBPointer _db = nullptr;
-  bool _tablesCreated = false; // <<< ADDED: Flag to track table creation
-
-  // Dart representations of the native functions
-  late _Sqlite3OpenV2Dart _sqlite3OpenV2;
-  late _Sqlite3CloseV2Dart _sqlite3CloseV2;
-  late _Sqlite3ErrmsgDart _sqlite3Errmsg;
-  late _Sqlite3ExecDart _sqlite3Exec; // <<< ADDED
-  late _Sqlite3FreeDart _sqlite3Free; // <<< ADDED
+  // A box is like a table in SQL; it stores all objects of a specific type.
+  late final Box<Document> _documentBox;
 
   final Function(String) eventLogger;
 
-  VectorDbService(this.eventLogger) {
-    // FFI setup has been moved to the initialize() method.
+  VectorDbService(this.eventLogger);
+
+  /// Initializes the service by getting a reference to the Document Box
+  /// from the main ObjectBox store.
+  Future<void> initialize() async {
+    // The 'store' is initialized in main.dart and is available globally.
+    _documentBox = store.box<Document>();
+    eventLogger('VectorDB: Service initialized. Box ready.');
+    _log.info('ObjectBox VectorDbService initialized.');
   }
 
-  Future<void> initialize({String dbName = 'vector_database.db'}) async {
-    if (_isInitialized) {
-      eventLogger('VectorDB: Already initialized.');
-      return;
-    }
-    eventLogger('VectorDB: Initializing...');
-
-    Pointer<Utf8> dbPathC = nullptr;
-    Pointer<SQLiteDBPointer> dbPointerPointer = nullptr;
-
-    try {
-      eventLogger('VectorDB: Loading native library...');
-      String libraryName;
-      if (Platform.isAndroid) {
-        libraryName = 'libsqlite_vector_search.so';
-      } else if (Platform.isIOS) {
-        libraryName = 'sqlite_vector_search.framework/sqlite_vector_search';
-      } else {
-        throw UnsupportedError(
-            'Platform not supported for native library loading');
-      }
-      _nativeLib = DynamicLibrary.open(libraryName);
-      eventLogger('VectorDB: Native library loaded successfully.');
-
-      _sqlite3OpenV2 = _nativeLib!
-          .lookupFunction<_Sqlite3OpenV2Native, _Sqlite3OpenV2Dart>(
-              'sqlite3_open_v2');
-      _sqlite3CloseV2 = _nativeLib!
-          .lookupFunction<_Sqlite3CloseV2Native, _Sqlite3CloseV2Dart>(
-              'sqlite3_close_v2');
-      _sqlite3Errmsg = _nativeLib!
-          .lookupFunction<_Sqlite3ErrmsgNative, _Sqlite3ErrmsgDart>(
-              'sqlite3_errmsg');
-
-      // <<< ADDED: Look up new functions >>>
-      _sqlite3Exec = _nativeLib!
-          .lookupFunction<_Sqlite3ExecNative, _Sqlite3ExecDart>('sqlite3_exec');
-      _sqlite3Free = _nativeLib!
-          .lookupFunction<_Sqlite3FreeNative, _Sqlite3FreeDart>('sqlite3_free');
-
-      eventLogger('VectorDB: SQLite functions looked up.');
-
-      final documentsDir = await getApplicationDocumentsDirectory();
-      final dbPath = p.join(documentsDir.path, dbName);
-      eventLogger('VectorDB: DB path is $dbPath');
-
-      dbPathC = dbPath.toNativeUtf8(allocator: calloc);
-      dbPointerPointer = calloc<SQLiteDBPointer>();
-
-      eventLogger('VectorDB: Calling sqlite3_open_v2...');
-      final openResult = _sqlite3OpenV2(
-        dbPathC,
-        dbPointerPointer,
-        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-        nullptr,
-      );
-
-      if (openResult != SQLITE_OK) {
-        String errorMsg = "VectorDB: Failed to open DB. Code: $openResult";
-        if (dbPointerPointer.value != nullptr) {
-          final Pointer<Utf8> errMessageC =
-              _sqlite3Errmsg(dbPointerPointer.value);
-          if (errMessageC != nullptr) {
-            errorMsg += ": ${errMessageC.toDartString()}";
-          }
-          _sqlite3CloseV2(dbPointerPointer.value);
-        }
-        eventLogger(errorMsg);
-        throw Exception(errorMsg);
-      }
-
-      _db = dbPointerPointer.value;
-
-      if (_db == nullptr) {
-        eventLogger('VectorDB: open returned OK but DB pointer is null.');
-        throw Exception(
-            'Failed to open SQLite database: received null pointer despite SQLITE_OK.');
-      }
-
-      _isInitialized = true;
-      eventLogger('VectorDB: Native DB Initialized SUCCESSFULLY.');
-    } catch (e) {
-      eventLogger('VectorDB: Initialization FAILED: $e');
-      _log.severe('VectorDbService: Initialization failed: $e');
-      _isInitialized = false;
-      rethrow;
-    } finally {
-      if (dbPathC != nullptr) calloc.free(dbPathC);
-      if (dbPointerPointer != nullptr) calloc.free(dbPointerPointer);
-    }
-  }
-
-  // <<< MODIFIED: addEmbedding now handles table creation >>>
+  /// Adds a new document with its vector embedding to the database.
   Future<void> addEmbedding({
-    required String id,
+    required String id, // We'll use textContent as the effective ID for now.
     required List<double> embedding,
     required Map<String, dynamic> metadata,
   }) async {
-    if (!_isInitialized || _db == nullptr) {
-      _log.warning(
-          'VectorDbService: Not initialized or database not open. Call initialize() first.');
-      return;
-    }
+    final newDocument = Document(
+      textContent: metadata['source'] ?? id, // Use metadata or the passed id.
+      embedding: embedding,
+    );
 
-    // Check and create tables if they don't exist yet
-    await _createTables();
-
-    eventLogger(
-        'VectorDB: addEmbedding called for id: $id. (Insertion not yet implemented)');
-    // TODO: Implement FFI calls to insert vector and metadata.
+    // 'put' inserts or updates the document. ObjectBox handles the HNSW indexing automatically.
+    _documentBox.put(newDocument);
+    eventLogger('VectorDB: Added embedding for "${newDocument.textContent}".');
   }
 
-  // <<< ADDED: New private method to create tables >>>
-  Future<void> _createTables() async {
-    if (_tablesCreated) return; // Only run once per session
-
-    eventLogger('VectorDB: Checking/Creating tables...');
-
-    // NOTE: You must decide on the dimensions for your vectors.
-    // This example uses 384, a common size for many embedding models.
-    const sqlCreateEmbeddingsTable =
-        'CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING sqlitevec(embedding FLOAT[384]);';
-
-    const sqlCreateMetadataTable = '''
-      CREATE TABLE IF NOT EXISTS metadata (
-        embedding_id INTEGER PRIMARY KEY,
-        source_type TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        content TEXT,
-        extra_data TEXT,
-        FOREIGN KEY (embedding_id) REFERENCES embeddings(rowid)
-      );
-    ''';
-
-    // Execute both CREATE TABLE statements
-    await _executeSql(sqlCreateEmbeddingsTable, 'embeddings');
-    await _executeSql(sqlCreateMetadataTable, 'metadata');
-
-    _tablesCreated = true;
-    eventLogger('VectorDB: Table check/creation complete.');
-  }
-
-  // <<< ADDED: New private helper method to execute SQL >>>
-  Future<void> _executeSql(String sql, String tableNameForLogging) async {
-    Pointer<Utf8> sqlC = nullptr;
-    Pointer<Pointer<Utf8>> errMsgPointer = nullptr;
-
-    try {
-      sqlC = sql.toNativeUtf8(allocator: calloc);
-      errMsgPointer = calloc<Pointer<Utf8>>();
-
-      eventLogger(
-          'VectorDB: Executing CREATE for $tableNameForLogging table...');
-      final execResult =
-          _sqlite3Exec(_db, sqlC, nullptr, nullptr, errMsgPointer);
-
-      if (execResult != SQLITE_OK) {
-        final errorMessage = errMsgPointer.value.toDartString();
-        eventLogger(
-            'VectorDB: FAILED to create $tableNameForLogging table. Code: $execResult, Error: $errorMessage');
-        _sqlite3Free(errMsgPointer.value.cast<Void>());
-        throw Exception(
-            'Failed to create $tableNameForLogging table: $errorMessage');
-      }
-      eventLogger('VectorDB: $tableNameForLogging table created successfully.');
-    } finally {
-      if (sqlC != nullptr) calloc.free(sqlC);
-      if (errMsgPointer != nullptr) calloc.free(errMsgPointer);
-    }
-  }
-
+  /// Queries the database to find the most similar documents to the given vector.
   Future<List<Map<String, dynamic>>> querySimilarEmbeddings({
     required List<double> queryEmbedding,
     required int topK,
   }) async {
-    if (!_isInitialized || _db == nullptr) {
-      _log.warning(
-          'VectorDbService: Not initialized or database not open. Call initialize() first.');
-      return [];
-    }
-    _log.info(
-        'VectorDbService: querySimilarEmbeddings called (FFI not yet fully implemented)...');
-    // TODO: Implement FFI calls for vector search
-    return [];
+    // 1. Build the query using the generated 'Document_' helper class.
+    // 2. Use 'nearestNeighborsF32' for vector search on the 'embedding' property.
+    final query = _documentBox
+        .query(Document_.embedding.nearestNeighborsF32(queryEmbedding, topK))
+        .build();
+
+    // 3. 'findWithScores' returns the matching objects along with their distance score.
+    final resultsWithScores = query.findWithScores();
+    query.close(); // It's good practice to close queries when done.
+
+    eventLogger(
+        'VectorDB: Found ${resultsWithScores.length} similar documents.');
+
+    // 4. Format the results into a list of maps, similar to the old API.
+    return resultsWithScores.map((result) {
+      return {
+        'document': result.object.textContent,
+        'score': result.score, // Lower score = more similar (closer distance)
+      };
+    }).toList();
   }
 
+  /// Disposes of resources. For ObjectBox, the store is managed globally
+  /// and typically lives for the duration of the app.
   Future<void> dispose() async {
-    if (!_isInitialized || _db == nullptr) {
-      eventLogger('VectorDB: Dispose called on uninitialized/closed DB.');
-      return;
-    }
-    eventLogger('VectorDB: Disposing native database...');
-    final closeResult = _sqlite3CloseV2(_db);
-
-    if (closeResult != SQLITE_OK) {
-      eventLogger('VectorDB: Error closing DB. Code: $closeResult');
-      _log.warning(
-          'VectorDbService: Error closing database. SQLite error code: $closeResult');
-    } else {
-      eventLogger('VectorDB: Native DB disposed successfully.');
-      _log.info(
-          'VectorDbService: Native SQLite database disposed successfully.');
-    }
-
-    _isInitialized = false;
-    _db = nullptr;
+    // The global store is managed in main.dart, so we don't close it here.
+    // If you had specific streams or queries in this service, you would close them here.
+    _log.info('VectorDbService disposed.');
+    return Future.value();
   }
 }
