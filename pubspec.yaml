@@ -33,7 +33,7 @@ dependencies:
 
   # Storage & data
   # Downgraded ObjectBox to be compatible with the build environment's Dart SDK
-  objectbox:              ^4.2.0
+  objectbox:              ^4.3.0
   objectbox_flutter_libs: any
 
   # Platform utilities
