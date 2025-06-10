@@ -24,12 +24,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # CORRECTED: This step now specifies a newer version of Flutter
+      # CORRECTED based on your research to get a compatible Dart SDK
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          # This version of Flutter contains a new enough Dart SDK to resolve the error.
-          flutter-version: '3.22.2'
+          flutter-version: '3.24.0'
           channel: 'stable'
           cache: true
 
