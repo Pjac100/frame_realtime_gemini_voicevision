@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -31,6 +32,35 @@ import 'objectbox.g.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image/image.dart' as img;
 import 'package:frame_realtime_gemini_voicevision/services/local_embedding_service.dart';
+
+
+/// This function runs in a separate isolate to process the image without
+/// blocking the UI thread.
+Uint8List _processImageInIsolate(Uint8List jpegBytes) {
+  // Decode the image
+  img.Image? originalImage = img.decodeImage(jpegBytes);
+  if (originalImage == null) {
+    return Uint8List(0); // Return an empty list if decoding fails
+  }
+
+  // Perform the heavy processing
+  img.Image processedImage = img.contrast(originalImage, contrast: 150);
+
+  // This uses a standard convolution kernel to achieve a sharpen effect,
+  // bypassing the specific sharpen() function to resolve the error.
+  processedImage = img.convolution(
+    processedImage,
+    filter: [ // A standard 3x3 sharpen kernel
+      -1, -1, -1,
+      -1,  9, -1,
+      -1, -1, -1
+    ],
+  );
+
+  // Re-encode the image to JPEG bytes
+  return Uint8List.fromList(img.encodeJpg(processedImage));
+}
+
 
 /// Provides access to the ObjectBox Store throughout the app.
 late Store store;
@@ -148,20 +178,21 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   void _handleFramePhoto(Uint8List jpegBytes) async {
     log('photo received from Frame, processing locally first.');
 
-    // --- Local Image Processing & OCR ---
     try {
-      img.Image? originalImage = img.decodeImage(jpegBytes);
-      if (originalImage != null) {
-        // CORRECTED: Image processing functions are called directly from the imported library 'img'.
-        img.Image processedImage = img.contrast(originalImage, contrast: 150);
-        processedImage = img.sharpen(processedImage, amount: 100);
+      // OFFLOAD HEAVY WORK TO AN ISOLATE
+      // The compute function runs _processImageInIsolate on a background thread.
+      final processedJpegBytes = await compute(_processImageInIsolate, jpegBytes);
 
-        final processedJpegBytes = Uint8List.fromList(img.encodeJpg(processedImage));
-
+      // If processing failed, the isolate returns an empty list.
+      if (processedJpegBytes.isEmpty) {
+        log('Image processing in isolate failed.');
+        // Don't process the rest of the local pipeline if image fails
+      } else {
+        // CONTINUE WITH OCR (now using the processed bytes)
         final inputImage = InputImage.fromBytes(
           bytes: processedJpegBytes,
           metadata: InputImageMetadata(
-            size: Size(processedImage.width.toDouble(), processedImage.height.toDouble()),
+            size: const Size(720, 720),
             rotation: InputImageRotation.rotation0deg,
             format: InputImageFormat.yuv420,
             bytesPerRow: 0,
@@ -174,10 +205,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         if (ocrText.isNotEmpty && _localEmbeddingService.isInitialized) {
           _appendEvent('OCR: "$ocrText"');
 
-          // --- Use the LocalEmbeddingService ---
           final embedding = await _localEmbeddingService.getEmbedding(ocrText);
 
-          if(embedding != null) {
+          if (embedding != null) {
             final newDocument = Document(
               timestamp: DateTime.now(),
               textContent: ocrText,
@@ -191,7 +221,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       log('Error during local image processing or OCR: $e');
     }
 
-    // --- Deliver to remote AI and Update UI ---
+    // --- Deliver to remote AI and Update UI (using the ORIGINAL image) ---
     if (_gemini.isConnected()) {
       _gemini.sendPhoto(jpegBytes);
     }
