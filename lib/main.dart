@@ -72,8 +72,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   static const resolution = 720;
   static const qualityIndex = 4;
   static const qualityLevel = 'VERY_HIGH';
-  final RxPhoto _rxPhoto =
-      RxPhoto(quality: qualityLevel, resolution: resolution);
+  final RxPhoto _rxPhoto = RxPhoto(quality: qualityLevel, resolution: resolution);
   StreamSubscription<Uint8List>? _photoSubs;
   Stream<Uint8List>? _photoStream;
   static const int photoInterval = 3;
@@ -153,33 +152,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       img.Image? originalImage = img.decodeImage(jpegBytes);
       if (originalImage != null) {
+        // CORRECTED: Image processing functions are called directly from the imported library 'img'.
         img.Image processedImage = img.contrast(originalImage, contrast: 150);
         processedImage = img.sharpen(processedImage, amount: 100);
-        final processedJpegBytes =
-            Uint8List.fromList(img.encodeJpg(processedImage));
+
+        final processedJpegBytes = Uint8List.fromList(img.encodeJpg(processedImage));
 
         final inputImage = InputImage.fromBytes(
           bytes: processedJpegBytes,
           metadata: InputImageMetadata(
-            size: Size(processedImage.width.toDouble(),
-                processedImage.height.toDouble()),
+            size: Size(processedImage.width.toDouble(), processedImage.height.toDouble()),
             rotation: InputImageRotation.rotation0deg,
             format: InputImageFormat.yuv420,
             bytesPerRow: 0,
           ),
         );
 
-        final RecognizedText recognizedText =
-            await _textRecognizer.processImage(inputImage);
+        final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
         final String ocrText = recognizedText.text.trim();
 
         if (ocrText.isNotEmpty && _localEmbeddingService.isInitialized) {
           _appendEvent('OCR: "$ocrText"');
 
-          // --- Use the new LocalEmbeddingService ---
+          // --- Use the LocalEmbeddingService ---
           final embedding = await _localEmbeddingService.getEmbedding(ocrText);
 
-          if (embedding != null) {
+          if(embedding != null) {
             final newDocument = Document(
               timestamp: DateTime.now(),
               textContent: ocrText,
@@ -223,12 +221,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _apiKeyController.text = prefs.getString('api_key') ?? '';
-      _systemInstructionController.text = prefs
-              .getString('system_instruction') ??
+      _systemInstructionController.text = prefs.getString('system_instruction') ??
           'The stream of images are coming live from the user\'s smart glasses, they are not a recorded video. For example, don\'t say "the person in the video", say "the person in front of you" if you are referring to someone you can see in the images. If an image is blurry, don\'t say the image is too blurry, wait for subsequent images that will arrive in the coming few seconds that might stabilize focus and be easier to process.\n\nAfter the user asks a question, never restate the question but instead directly answer it. No need to start responding when the images come in, wait for the user to start talking and only refer to the live images when relevant.\n\nTry not to repeat what the user is asking unless you\'re really unsure.';
       _voiceName = GeminiVoiceName.values.firstWhere(
-        (e) =>
-            e.toString().split('.').last ==
+            (e) =>
+        e.toString().split('.').last ==
             (prefs.getString('voice_name') ?? 'Puck'),
         orElse: () => GeminiVoiceName.Puck,
       );
@@ -335,8 +332,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       await frame!.sendMessage(0x30, TxCode(value: 1).pack());
       await _requestPhoto();
       _photoTimer = Timer.periodic(const Duration(seconds: photoInterval), (
-        timer,
-      ) async {
+          timer,
+          ) async {
         _log.info('Timer Fired!');
         if (!_streaming) {
           timer.cancel();
@@ -450,8 +447,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                         },
                         items: GeminiVoiceName.values
                             .map<DropdownMenuItem<GeminiVoiceName>>((
-                          GeminiVoiceName value,
-                        ) {
+                            GeminiVoiceName value,
+                            ) {
                           return DropdownMenuItem<GeminiVoiceName>(
                             value: value,
                             child: Text(value.toString().split('.').last),
@@ -481,7 +478,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                           _appendEvent('Testing addEmbedding...');
                           _vectorDbService.addEmbedding(
                               id: 'test1',
-                              embedding: List.filled(384, 0.1),
+                              embedding:
+                              List.filled(384, 0.1),
                               metadata: {'source': 'manual_test'});
                         },
                         child: const Text('Test DB'),
@@ -500,7 +498,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                         _image ?? Container(),
                         Expanded(
                           child: ListView.builder(
-                            controller: _eventLogController,
+                            controller:
+                            _eventLogController,
                             itemCount: _eventLog.length,
                             itemBuilder: (context, index) {
                               return Text(_eventLog[index], style: _textStyle);
@@ -531,9 +530,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 bottom: 20,
                 right: 20,
                 child: getFloatingActionButtonWidget(
-                      const Icon(Icons.mic),
-                      const Icon(Icons.mic_off),
-                    ) ??
+                  const Icon(Icons.mic),
+                  const Icon(Icons.mic_off),
+                ) ??
                     Container(),
               ),
             ],
