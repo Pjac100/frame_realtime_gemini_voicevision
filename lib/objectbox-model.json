@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:969174070785586791",
-      "lastPropertyId": "3:1648759725581703846",
+      "lastPropertyId": "4:343692381373159556",
       "name": "Document",
       "properties": [
         {
@@ -25,6 +25,11 @@
           "type": 28,
           "flags": 8,
           "indexId": "1:9089198750530166764"
+        },
+        {
+          "id": "4:343692381373159556",
+          "name": "timestamp",
+          "type": 10
         }
       ],
       "relations": []

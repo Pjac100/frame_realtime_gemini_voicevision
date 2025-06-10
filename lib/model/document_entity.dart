@@ -7,6 +7,11 @@ class Document {
   @Id()
   int id = 0;
 
+  /// NEW: The timestamp of when the data was captured.
+  /// This is indexed as a Date type for efficient time-based queries.
+  @Property(type: PropertyType.date)
+  DateTime timestamp;
+
   /// The original text content of the document.
   String textContent;
 
@@ -25,6 +30,7 @@ class Document {
 
   Document({
     this.id = 0,
+    required this.timestamp, // Make timestamp required
     required this.textContent,
     this.embedding,
   });

@@ -1,4 +1,3 @@
-// lib/services/vector_db_service.dart
 import 'package:logging/logging.dart';
 
 // Import the main app file to get access to the global 'store'.
@@ -27,20 +26,29 @@ class VectorDbService {
     _log.info('ObjectBox VectorDbService initialized.');
   }
 
+  /// NEW: Adds a new Document object directly to the database.
+  void addDocument(Document document) {
+    _documentBox.put(document);
+    eventLogger('VectorDB: Stored: "${document.textContent}"');
+    _log.info(
+        'Stored document in ObjectBox with text: ${document.textContent}');
+  }
+
   /// Adds a new document with its vector embedding to the database.
+  /// This method is updated to work with the new Document model.
   Future<void> addEmbedding({
     required String id, // We'll use textContent as the effective ID for now.
     required List<double> embedding,
     required Map<String, dynamic> metadata,
   }) async {
     final newDocument = Document(
+      timestamp: DateTime.now(), // Add timestamp here to fix constructor error
       textContent: metadata['source'] ?? id, // Use metadata or the passed id.
       embedding: embedding,
     );
 
-    // 'put' inserts or updates the document. ObjectBox handles the HNSW indexing automatically.
-    _documentBox.put(newDocument);
-    eventLogger('VectorDB: Added embedding for "${newDocument.textContent}".');
+    // Use the new, simpler method
+    addDocument(newDocument);
   }
 
   /// Queries the database to find the most similar documents to the given vector.
