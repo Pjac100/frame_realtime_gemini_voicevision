@@ -4,40 +4,42 @@ name: Build Frame Vision Gemini Demo APK
 on:
   push:
     branches:
-      - temp-stable-build # CHANGED: Now triggers on your current default branch
+      - temp-stable-build
   pull_request:
     branches:
-      - temp-stable-build # CHANGED: Now triggers for PRs against your branch
-  workflow_dispatch: # Allows you to trigger this workflow manually from the Actions tab
+      - temp-stable-build
+  workflow_dispatch:
 
 jobs:
   build_apk:
     name: Build Demo APK
-    runs-on: ubuntu-latest # Use the latest available Ubuntu runner
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. Checks out your repository under $GITHUB_WORKSPACE, so your workflow can access it
+      # 1. Checks out your repository
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      # 2. Set up Java Development Kit (JDK) - Required for Android builds
+      # 2. Set up Java Development Kit (JDK)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Set up Flutter SDK
+      # 3. Set up Flutter SDK - THIS STEP IS NOW CORRECTED
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.22.2' # <-- ADDED: Specifies a modern Flutter version
           channel: 'stable'
+          cache: true               # <-- ADDED: Speeds up future builds by caching the SDK
 
       # 4. Install Flutter project dependencies
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      # 5. Ensure android/gradlew is executable (good practice)
+      # 5. Ensure android/gradlew is executable
       - name: Ensure gradlew is executable
         run: |
           if [ -f "android/gradlew" ]; then
@@ -46,7 +48,7 @@ jobs:
             echo "android/gradlew not found, skipping chmod. Flutter build will attempt to proceed."
           fi
 
-      # 6. NEW: Clean the project before building
+      # 6. Clean the project before building
       - name: Clean Flutter build cache
         run: flutter clean
 
@@ -58,6 +60,6 @@ jobs:
       - name: Upload Demo APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frame-vision-gemini-debug.apk # Name of the artifact you'll download
-          path: build/app/outputs/flutter-apk/app-debug.apk # Standard path for Flutter debug APKs
-          if-no-files-found: error # Fail the workflow if the APK isn't found
+          name: frame-vision-gemini-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
