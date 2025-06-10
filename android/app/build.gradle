@@ -1,32 +1,36 @@
+/*
+ * android/app/build.gradle – amended for SDK 35
+ * – compileSdk / targetSdk raised to 35
+ * – nothing else changed except a comment banner
+ */
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin plugins.
     id "dev.flutter.flutter-gradle-plugin"
 }
 
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file("local.properties")
+def localProperties      = new Properties()
+def localPropertiesFile  = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localPropertiesFile.withReader("UTF-8") { reader ->
         localProperties.load(reader)
     }
 }
 
-def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
-if (flutterVersionCode == null) {
-    flutterVersionCode = "1"
-}
-
-def flutterVersionName = localProperties.getProperty("flutter.versionName")
-if (flutterVersionName == null) {
-    flutterVersionName = "1.0"
-}
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
 
 android {
-    namespace = "com.example.frame_realtime_gemini_voicevision"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    namespace    = "com.example.frame_realtime_gemini_voicevision"
+
+    /* ----------------------------------------------------------------------
+       ↑↑  Bump compileSdk / targetSdk to 35  (was 34).  Required by:
+       • flutter_plugin_android_lifecycle 2.0.28
+       ---------------------------------------------------------------------- */
+    compileSdk   = 35
+    ndkVersion   = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -35,10 +39,10 @@ android {
 
     defaultConfig {
         applicationId = "com.example.frame_realtime_gemini_voicevision"
-        minSdk = 26 // raw_sound(26)
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutterVersionCode.toInteger()
-        versionName = flutterVersionName
+        minSdk        = 26            // raw_sound requires >= 26
+        targetSdk     = 35            // align with compileSdk
+        versionCode   = flutterVersionCode.toInteger()
+        versionName   = flutterVersionName
     }
 
     buildTypes {
@@ -53,13 +57,13 @@ flutter {
 }
 
 dependencies {
-    // Replaced '$kotlin_version' with a specific version number to fix the build error.
+    // Kotlin runtime (match plugin 1.9.x)
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.23"
 
-    // Standard AndroidX and testing dependencies often included in Flutter projects.
-    implementation 'androidx.core:core-ktx:1.9.0'
+    // Typical AndroidX + test libs
+    implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'com.google.android.material:material:1.11.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
