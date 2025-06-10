@@ -8,7 +8,7 @@ publish_to: none
 version: 0.1.0
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"       # Dart 3.5 satisfies ObjectBox 4.2
+  sdk: ">=3.5.0 <4.0.0"    # Dart 3.5 is enough
   flutter: ">=3.22.0"
 
 ###############################################################################
@@ -18,11 +18,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Brilliant-Frame stack
+  ## Brilliant-Frame SDK
   simple_frame_app:           ^7.1.0
   frame_msg:                  ^2.0.0
 
-  # Bluetooth LE
+  ## Bluetooth LE
   flutter_blue_plus:          ^1.35.3
   flutter_blue_plus_android:  ^3.0.0
   flutter_blue_plus_darwin:   ^3.0.0
@@ -30,24 +30,24 @@ dependencies:
   flutter_blue_plus_web:      ^3.0.0
   flutter_blue_plus_platform_interface: ^3.0.0
 
-  # On-device ML
-  tflite_flutter:             ^0.10.4          # interpreter
-  tflite_flutter_processing:  ^0.4.1           # helper (requires 0.10.x)
+  ## On-device ML
+  tflite_flutter:             ^0.10.4            # required by processing 0.4.x
+  tflite_flutter_processing:  ^0.4.1
   google_mlkit_text_recognition: ^0.11.0
   image:                      ^4.5.2
 
-  # Local database
-  objectbox:              ^4.2.0               # 4.3.0 needs path 1.9.1
+  ## Local database
+  objectbox:              ^4.2.0
   objectbox_flutter_libs: ^4.2.0
 
-  # Platform utilities
+  ## Platform util
   shared_preferences:      ^2.3.2
   share_plus:              ^10.1.0
   flutter_foreground_task: ^6.5.0
   flutter_pcm_sound:       ^3.1.1
   web_socket_channel:      ^3.0.1
-  path_provider:           ^2.1.4              # works with path 1.9.0
-  path:                    1.9.0               # pin—flutter_test requires this
+  path_provider:           ^2.1.4
+  path:                    1.9.0        # pinned for flutter_test / OBX
   uuid:                    ^4.5.1
   rxdart:                  ^0.28.0
   logging:                 ^1.3.0
@@ -59,15 +59,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints:  ^3.0.2
-  build_runner:   ^2.4.13      # last tag that supports Dart 3.5
-  objectbox_generator: ^4.2.0  # matches ObjectBox 4.2 / path 1.9.0
+  build_runner:   ^2.4.13      # Dart 3.5 cap
+  objectbox_generator: ^4.2.0
 
 ###############################################################################
-# Overrides needed to build with Dart 3.5 + path 1.9.0
+# Overrides
 ###############################################################################
 dependency_overrides:
-  path: 1.9.0       # keeps flutter_test & objectbox_generator compatible
-  typed_data: ^1.4.0  # provides UnmodifiableUint8ListView for tflite_flutter
+  # Needed by tflite_flutter 0.10.x (contains UnmodifiableUint8ListView)
+  typed_data: 1.3.2
+  # Pin path so test + OBX agree
+  path: 1.9.0
 
 ###############################################################################
 # Flutter assets
@@ -75,16 +77,14 @@ dependency_overrides:
 flutter:
   uses-material-design: true
   assets:
-    # Lua helpers bundled in frame_msg
+    # Lua helpers
     - packages/frame_msg/lua/battery.min.lua
     - packages/frame_msg/lua/data.min.lua
     - packages/frame_msg/lua/camera.min.lua
     - packages/frame_msg/lua/code.min.lua
     - packages/frame_msg/lua/plain_text.min.lua
-
-    # Frame-side bootstrap
+    # Frame Lua bootstrap
     - assets/frame_app.min.lua
-
-    # TFLite model & vocabulary
+    # TFLite model & vocab
     - assets/models/mobilebert_embedding.tflite
     - assets/models/vocab.txt
