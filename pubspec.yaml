@@ -26,13 +26,14 @@ dependencies:
   flutter_blue_plus:          ^1.35.3
 
   # On-device ML
-  tflite_flutter:             ^0.10.4      # interpreter (matches Processing)
-  tflite_flutter_processing:  ^0.4.1       # ImageProcessor / AudioClassifier
+  tflite_flutter:             ^0.10.4
+  tflite_flutter_processing:  ^0.4.1
   google_mlkit_text_recognition: ^0.11.0
   image:                      ^4.5.2
 
   # Storage & data
-  objectbox:              ^4.3.0
+  # Downgraded ObjectBox to be compatible with the build environment's Dart SDK
+  objectbox:              ^4.2.0
   objectbox_flutter_libs: any
 
   # Platform utilities
@@ -55,7 +56,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints:  ^3.0.2
   build_runner:   ^2.4.15
-  objectbox_generator: ^4.3.0
+  # Downgraded ObjectBox generator to be compatible with the build environment's Dart SDK
+  objectbox_generator: ^4.2.0
 
 ############################
 # Flutter assets
