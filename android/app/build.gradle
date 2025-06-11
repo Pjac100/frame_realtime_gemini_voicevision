@@ -17,13 +17,11 @@ if (flutterVersionName == null) {
 }
 
 apply plugin: 'com.android.application'
+apply from: '../../node_modules/react-native-vector-icons/fonts.gradle' // If you have vector icons
 
 android {
     namespace "com.example.frame_realtime_gemini_voicevision"
     compileSdkVersion 34
-
-    // The problematic line "ndkVersion flutter.ndkVersion" has been removed.
-    // The Flutter tool will now handle this automatically.
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -45,9 +43,7 @@ android {
     }
 }
 
-flutter {
-    source '../..'
-}
+// The problematic flutter { ... } block has been removed.
 
 dependencies {
     // No extra dependencies needed here by default
