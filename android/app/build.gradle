@@ -1,87 +1,54 @@
-/*
- * android/app/build.gradle
- * replaces the previous file you pasted
- */
-plugins {
-    id "com.android.application"
-    id "org.jetbrains.kotlin.android"
-    // Flutter plug-in MUST come last ⬇︎
-    id "dev.flutter.flutter-gradle-plugin"
-}
-
-def localProperties      = new Properties()
-def localPropertiesFile  = rootProject.file("local.properties")
+// Standard Flutter build.gradle template
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader("UTF-8") { localProperties.load(it) }
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
 }
 
-def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
-def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
+apply plugin: 'com.android.application'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
-    /* ─────────────────────────────────────────────────────────────
-       ▸ API 35 is REQUIRED by flutter_plugin_android_lifecycle ≥2.0.28
-         (see its pubspec) and is fully backward-compatible ✔︎  :contentReference[oaicite:0]{index=0}
-       ───────────────────────────────────────────────────────────── */
-    compileSdk 35          // fixed number → no longer inherits Flutter’s default (34)
-    buildToolsVersion "35.0.0"   // keeps CI images happy when API 35 tools are present
-    namespace "com.example.frame_realtime_gemini_voicevision"
+    namespace "com.example.frame_realtime_gemini_voicevision" // You can change this to your app's identifier
+    compileSdkVersion 34 // Updated to a modern SDK version
+    ndkVersion flutter.ndkVersion
 
-    /* ensures you can still run on the vast majority of devices */
-    defaultConfig {
-        applicationId "com.example.frame_realtime_gemini_voicevision"
-        minSdk       26            // required by flutter_pcm_sound 3.x  :contentReference[oaicite:1]{index=1}
-        targetSdk    35
-        versionCode  flutterVersionCode.toInteger()
-        versionName  flutterVersionName
-    }
-
-    /* Java 17 everywhere – matches Flutter 3.24 tool-chain */
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-        coreLibraryDesugaringEnabled true   // lets you use recent java.time APIs on API 26  :contentReference[oaicite:2]{index=2}
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    /* Kotlin tool-chain also on 17 so Gradle’s “K2” compiler is happy */
-    kotlin {
-        jvmToolchain(17)
+    defaultConfig {
+        applicationId "com.example.frame_realtime_gemini_voicevision" // You can change this to your app's identifier
+        minSdkVersion 21
+        targetSdkVersion 34 // Updated to a modern SDK version
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
     }
 
     buildTypes {
         release {
-            // keep it simple while you iterate; enable R8 later
             signingConfig signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
-        }
-    }
-
-    /* avoids duplicate native symbols when multiple plug-ins ship .so files */
-    packagingOptions {
-        jniLibs {
-            useLegacyPackaging true
         }
     }
 }
 
 flutter {
-    /* points Gradle back to the Flutter module root */
-    source = "../.."
+    source '../..'
 }
 
 dependencies {
-    // Kotlin std-lib (keep in lock-step with Gradle plug-in 8.4.x)
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.23"  
-
-    /* Desugaring JDK 8+ APIs for API 26 devices */
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'  :contentReference[oaicite:4]{index=4}
-
-    // AndroidX & test libs
-    implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    // No extra dependencies needed here by default
 }
