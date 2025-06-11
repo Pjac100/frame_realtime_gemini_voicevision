@@ -17,12 +17,13 @@ if (flutterVersionName == null) {
 }
 
 apply plugin: 'com.android.application'
-// The 'apply from' line that was here has been moved to the bottom.
 
 android {
     namespace "com.example.frame_realtime_gemini_voicevision"
     compileSdkVersion 34
-    ndkVersion flutter.ndkVersion
+
+    // The problematic line "ndkVersion flutter.ndkVersion" has been removed.
+    // The Flutter tool will now handle this automatically.
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -52,7 +53,4 @@ dependencies {
     // No extra dependencies needed here by default
 }
 
-// THIS IS THE CORRECTED PART:
-// By applying the Flutter Gradle script at the end, it ensures that 'flutterRoot'
-// and other properties are available when the script needs them.
 apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
