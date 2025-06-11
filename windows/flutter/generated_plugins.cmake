@@ -3,9 +3,14 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  objectbox_flutter_libs
+  share_plus
+  tflite_flutter_processing
+  url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  tflite_flutter
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)
