@@ -17,7 +17,7 @@ if (flutterVersionName == null) {
 }
 
 apply plugin: 'com.android.application'
-apply from: '../../node_modules/react-native-vector-icons/fonts.gradle' // If you have vector icons
+// The erroneous 'apply from' for react-native-vector-icons has been removed.
 
 android {
     namespace "com.example.frame_realtime_gemini_voicevision"
@@ -42,8 +42,6 @@ android {
         }
     }
 }
-
-// The problematic flutter { ... } block has been removed.
 
 dependencies {
     // No extra dependencies needed here by default
