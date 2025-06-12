@@ -1,0 +1,64 @@
+name: Build Frame Vision Gemini Demo APK
+
+# Controls when the workflow will run
+on:
+  push:
+    branches:
+      - temp-stable-build
+      - main
+      - develop
+      - final-working-code # Added your new branch
+  pull_request:
+    branches:
+      - temp-stable-build
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_apk:
+    name: Build Demo APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository code
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      # 2. Set up Java Development Kit (JDK)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 3. Set up Flutter SDK (Corrected)
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0' # Pinned to a modern, compatible version
+          channel: 'stable'
+          cache: true
+
+      # 4. Install Flutter project dependencies
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      # 5. Generate database code (Added)
+      - name: Run Build Runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # 6. Clean the project before building
+      - name: Clean Flutter build cache
+        run: flutter clean
+
+      # 7. Build the debug APK
+      - name: Build Debug APK
+        run: flutter build apk --debug
+
+      # 8. Upload the generated APK as an artifact
+      - name: Upload Demo APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frame-vision-gemini-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error

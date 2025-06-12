@@ -1,0 +1,49 @@
+name: Flutter CI - Test Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - final-working-code # Added your new branch
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  test:
+    name: Run Flutter Analyzer & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Flutter (Corrected to match build workflow)
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0' # Pinned to a modern, compatible version
+          channel: 'stable'
+          cache: true
+
+      # 3. Get Flutter dependencies
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # 4. Generate database code (Added and required before analyze/test)
+      - name: Run Build Runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # 5. Check Dart formatting
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      # 6. Analyze Dart code
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      # 7. Run Flutter tests
+      - name: Run Flutter tests
+        run: flutter test
