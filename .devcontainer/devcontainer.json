@@ -1,0 +1,27 @@
+{
+  "name": "android-codespace",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/java:1":  { "version": "17" },
+    "ghcr.io/casl0/devcontainer-features/android-sdk:1": { "version": "34.0.0" },
+    "ghcr.io/devcontainers/features/gradle:1": {}
+    ,"ghcr.io/hsun1031/devcontainer_flutter:latest": {}
+  },
+  "postCreateCommand": [
+    "./scripts/accept-android-licenses.sh",
+    "./gradlew --version"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-gradle",
+        "eamodio.gitlens",
+        "ms-vscode.cpptools"
+        ,
+        "dart-code.flutter"
+      ]
+    }
+  },
+  "forwardPorts": [5555, 8080],
+  "remoteUser": "codespace"
+}
