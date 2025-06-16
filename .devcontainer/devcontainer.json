@@ -1,27 +1,71 @@
 {
+  // ────────────────────────────────
+  // Dev Container configuration
+  // ────────────────────────────────
   "name": "android-codespace",
+
+  // Build the image from the Dockerfile in this folder
   "build": { "dockerfile": "Dockerfile" },
+
+  // ── Features to install inside the image ───────────────────────────────────────
   "features": {
-    "ghcr.io/devcontainers/features/java:1":  { "version": "17" },
-    "ghcr.io/casl0/devcontainer-features/android-sdk:1": { "version": "34.0.0" },
-    "ghcr.io/devcontainers/features/gradle:1": {}
-    ,"ghcr.io/hsun1031/devcontainer_flutter:latest": {}
+    // Java 17 via SDK-man (installs JDK + basic toolchain helpers)
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17"
+    },
+
+    // Android SDK & platform-tools (API 34 / Build-Tools 34.0.0)
+    "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
+      "version": "34.0.0"
+    },
+
+    // Stand-alone Gradle CLI (handy for non-Android builds or quick checks)
+    "ghcr.io/devcontainers/features/gradle:1": {},
+
+    // Flutter tool-chain (Dart SDK, `flutter` CLI, etc.)
+    "ghcr.io/hsun1031/devcontainer_flutter:latest": {}
   },
+
+  // ── Environment tweaks ─────────────────────────────────────────────────────────
+  "containerEnv": {
+    // Where Flutter was installed by the Feature
+    "FLUTTER_HOME": "/workspaces/frame_realtime_gemini_voicevision/.devcontainer/flutter",
+
+    // Append Flutter’s bin directory to the *existing* PATH inside the container
+    // ${containerEnv:PATH} → resolves to the PATH that features + base image set up
+    "PATH": "${containerEnv:PATH}:${containerEnv:FLUTTER_HOME}/bin"
+  },
+
+  // ── First-run provisioning commands ────────────────────────────────────────────
   "postCreateCommand": [
-    "./scripts/accept-android-licenses.sh",
-    "./gradlew --version"
+    // Make sure the helper script is executable, then run it to accept SDK licences
+    "chmod +x .devcontainer/scripts/accept-android-licenses.sh",
+    ".devcontainer/scripts/accept-android-licenses.sh",
+
+    // Sanity-check tool versions
+    "java -version",
+    "gradle --version",
+
+    // If an Android-project wrapper exists, use it to verify Gradle config
+    "[ -f android/gradlew ] && chmod +x android/gradlew && android/gradlew --version || true"
   ],
+
+  // ── VS Code extensions that should be pre-installed ───────────────────────────
   "customizations": {
     "vscode": {
       "extensions": [
         "vscjava.vscode-gradle",
         "eamodio.gitlens",
-        "ms-vscode.cpptools"
-        ,
+        "ms-vscode.cpptools",
         "dart-code.flutter"
       ]
     }
   },
+
+  // ── Ports to expose from the container back to the Codespace UI ────────────────
   "forwardPorts": [5555, 8080],
+
+  // Default non-root user in GitHub-provided Codespaces images
   "remoteUser": "codespace"
 }
+
