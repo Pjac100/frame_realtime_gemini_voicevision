@@ -1,38 +1,37 @@
 {
   "name": "android-codespace",
 
-  // Use the pre-built Ubuntu base image instead of writing a Dockerfile for now
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  // Use your Dockerfile so you keep any custom layers you’ve already added
+  "build": { "dockerfile": "Dockerfile" },
 
   "features": {
-    // Shell utilities, git, zsh, etc.
+    // Basic CLI goodies (curl, git, zsh, etc.)
     "ghcr.io/devcontainers/features/common-utils:2": {},
 
-    // JDK 17 **and Gradle (via installGradle)**
+    // Java 17 plus Gradle (devcontainers/java can install Gradle for you)
     "ghcr.io/devcontainers/features/java:1": {
       "version": "17",
-      "installGradle": true
+      "installGradle": true          // gives you gradle in the PATH
     },
 
-    // Android SDK (API-34)
+    // Android SDK (API 34)
     "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
       "version": "34.0.0"
     },
 
-    // Flutter SDK
-    "ghcr.io/hsun1031/devcontainer_flutter:latest": {}
-  },
-
-  // Make Flutter’s CLI available in every shell
-  "containerEnv": {
-    "PATH": "${containerEnv:PATH}:/workspaces/frame_realtime_gemini_voicevision/.devcontainer/flutter/bin"
+    // Flutter SDK (correct registry path + feature name)
+    "ghcr.io/hsun1031/devcontainer-features/flutter:latest": {}
   },
 
   "postCreateCommand": [
+    // Accept Android licenses
     "chmod +x .devcontainer/scripts/accept-android-licenses.sh",
     ".devcontainer/scripts/accept-android-licenses.sh",
+
+    // Quick sanity-check of toolchains
     "java -version",
-    "gradle --version"
+    "gradle --version",
+    "flutter --version"
   ],
 
   "customizations": {
@@ -46,5 +45,9 @@
     }
   },
 
-  "forwardPorts": [5555, 8080]
+  // Commonly exposed ports (ADB + your dev server)
+  "forwardPorts": [5555, 8080],
+
+  // Default non-root user inside the container
+  "remoteUser": "codespace"
 }
