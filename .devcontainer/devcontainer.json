@@ -1,53 +1,44 @@
 {
-  "name": "android-codespace",
+  "name": "android-flutter-codespace",
 
-  // Use your Dockerfile so you keep any custom layers you’ve already added
-  "build": { "dockerfile": "Dockerfile" },
+  // ✅ Flutter 3.x, Dart SDK, Java 17, Android SDK & ADB already installed.
+  //    See: https://github.com/cirruslabs/docker-images/tree/master/flutter
+  "image": "ghcr.io/cirruslabs/flutter:3.22.1",  // pin the tag you prefer
 
   "features": {
-    // Basic CLI goodies (curl, git, zsh, etc.)
+    // CLI niceties, git, zsh, curl, etc.
     "ghcr.io/devcontainers/features/common-utils:2": {},
 
-    // Java 17 plus Gradle (devcontainers/java can install Gradle for you)
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
-      "installGradle": true          // gives you gradle in the PATH
-    },
-
-    // Android SDK (API 34)
+    // Use the full Android SDK for API-34 (the Cirrus image ships 34 by default,
+    // but including the Feature keeps `sdkmanager` available for future updates)
     "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
       "version": "34.0.0"
-    },
-
-    // Flutter SDK (correct registry path + feature name)
-    "ghcr.io/hsun1031/devcontainer-features/flutter:latest": {}
+    }
   },
 
+  // Run once the container is up
   "postCreateCommand": [
-    // Accept Android licenses
-    "chmod +x .devcontainer/scripts/accept-android-licenses.sh",
-    ".devcontainer/scripts/accept-android-licenses.sh",
+    // Accept Android licences non-interactively
+    "yes | sdkmanager --licenses",
 
-    // Quick sanity-check of toolchains
-    "java -version",
-    "gradle --version",
-    "flutter --version"
+    // Make sure Flutter itself is sane
+    "flutter doctor -v"
   ],
 
   "customizations": {
     "vscode": {
       "extensions": [
+        "dart-code.flutter",
         "vscjava.vscode-gradle",
         "eamodio.gitlens",
-        "ms-vscode.cpptools",
-        "dart-code.flutter"
+        "ms-vscode.cpptools"
       ]
     }
   },
 
-  // Commonly exposed ports (ADB + your dev server)
+  // Forward the most common dev ports
   "forwardPorts": [5555, 8080],
 
-  // Default non-root user inside the container
+  // Default user inside the container
   "remoteUser": "codespace"
 }
