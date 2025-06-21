@@ -1,43 +1,38 @@
 {
   "name": "android-codespace",
 
-  // Build with the Dockerfile in this repo
-  "build": { "dockerfile": "Dockerfile" },
+  // Use the pre-built Ubuntu base image instead of writing a Dockerfile for now
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
 
   "features": {
-    // Java 17 via SDKMAN! (installs Gradle when we ask for it)
-    "ghcr.io/devcontainers/features/java:1":  { "version": "17", "installGradle": true },
+    // Shell utilities, git, zsh, etc.
+    "ghcr.io/devcontainers/features/common-utils:2": {},
 
-    // Latest Gradle CLI (makes gradle wrapper optional)
-    "ghcr.io/devcontainers/features/gradle:1": {},
+    // JDK 17 **and Gradle (via installGradle)**
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installGradle": true
+    },
 
-    // Android SDK / Platform-tools / Build-tools 34.0.0
-    "ghcr.io/casl0/devcontainer-features/android-sdk:1": { "version": "34.0.0" },
+    // Android SDK (API-34)
+    "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
+      "version": "34.0.0"
+    },
 
-    // Flutter SDK (hsun1031 keeps it up to date for dev-containers)
+    // Flutter SDK
     "ghcr.io/hsun1031/devcontainer_flutter:latest": {}
   },
 
-  // Add Flutter’s bin dir to every future shell
+  // Make Flutter’s CLI available in every shell
   "containerEnv": {
-    "PATH": "${containerEnv:PATH}:/workspaces/${localWorkspaceFolderBasename}/.devcontainer/flutter/bin"
+    "PATH": "${containerEnv:PATH}:/workspaces/frame_realtime_gemini_voicevision/.devcontainer/flutter/bin"
   },
 
   "postCreateCommand": [
-    // Make sure our licence helper is executable, then run it
     "chmod +x .devcontainer/scripts/accept-android-licenses.sh",
     ".devcontainer/scripts/accept-android-licenses.sh",
-
-    // Sanity-check tool versions
     "java -version",
-    "gradle --version",
-
-    // If this repo has an Android-specific gradle wrapper, show its version too
-    "[ -f android/gradlew ] && chmod +x android/gradlew && android/gradlew --version || true",
-
-    // Throw away SDKMAN / apt caches to keep the image smaller
-    "sdk flush archives > /dev/null || true",
-    "sudo apt-get clean"
+    "gradle --version"
   ],
 
   "customizations": {
@@ -51,10 +46,5 @@
     }
   },
 
-  // Typical ports: adb → 5555, dev-server / emulator bridge → 8080
   "forwardPorts": [5555, 8080]
-
-  // ⬅️  **NO remoteUser key**: the default 'vscode' account will be used
 }
-
-
