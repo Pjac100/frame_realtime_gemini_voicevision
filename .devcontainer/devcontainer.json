@@ -1,42 +1,35 @@
+// .devcontainer/devcontainer.json
 {
-  // ----------------------------------------------------------
-  //  Flutter / Android build environment – parity with
-  //  the “Build Cognitive Assistant APK” workflow
-  // ----------------------------------------------------------
-  "name": "Flutter Android CI Environment (ubuntu-22.04)",
+  "name": "Flutter CI parity (Flutter 3.24.0)",
+  "image": "docker.io/cirrusci/flutter:3.24.0",
 
-  // 1) Base image – already contains Android SDK + Flutter
-  //    (tag = Flutter SDK version so we pin to 3.24.0)
-  "image": "ghcr.io/sambyeol/flutter-devcontainer:3.24.0",
-
-  // 2) Guarantee the Codespace has at least the same muscle
-  //    as the hosted runner (4 vCPU / 16 GB RAM)
+  // match the public Actions runner HW spec (4 vCPU, 16 GiB)
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",
     "storage": "32gb"
   },
 
-  // 3) Add Temurin JDK 17 exactly like actions/setup-java
   "features": {
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
-      "distribution": "temurin",
-      "installGradle": "true",   // flutter build calls gradle
-      "installMaven": "false"
+    // Exactly what your workflow uses
+    "ghcr.io/devcontainers/features/java:1": { "version": "17" },
+    "ghcr.io/devcontainers/features/android-sdk:1": {
+      "version": "latest",
+      "buildToolsVersion": "34.0.0",
+      "platformVersion": "34",
+      "cmake": "true"
     }
   },
 
-  // 4) One-time licence acceptance + quick health check
-  "postCreateCommand": "yes | sdkmanager --licenses && flutter doctor -v",
+  "containerEnv": {
+    "ANDROID_HOME": "/opt/android-sdk",
+    "ANDROID_SDK_ROOT": "/opt/android-sdk",
+    "JAVA_HOME": "/usr/lib/jvm/ms-jdk-17-linux-amd64"
+  },
 
-  // 5) VS Code goodies – identical for every developer
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "dart-code.dart-code",
-        "dart-code.flutter"
-      ]
-    }
-  }
+  // warm caches & accept licences once
+  "postCreateCommand": [
+    "yes | sdkmanager --licenses",
+    "flutter doctor -v"
+  ]
 }
