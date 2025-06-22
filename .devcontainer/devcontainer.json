@@ -22,10 +22,11 @@
     }
   },
 
+  // CORRECTED: Removed the manual JAVA_HOME definition.
+  // The Java feature will now set this automatically and correctly.
   "containerEnv": {
     "ANDROID_HOME": "/opt/android-sdk",
-    "ANDROID_SDK_ROOT": "/opt/android-sdk",
-    "JAVA_HOME": "/usr/lib/jvm/ms-jdk-17-linux-amd64"
+    "ANDROID_SDK_ROOT": "/opt/android-sdk"
   },
 
   "postCreateCommand": "yes | sdkmanager --licenses && ./gradlew :app:dependencies",
@@ -41,8 +42,8 @@
         "github.codespaces"
       ],
       "settings": {
-        // Use the container's environment variable to find the JDK.
-        // This is more robust than a hardcoded path.
+        // This setting is still correct. It will now use the correct JAVA_HOME
+        // variable that the Java feature provides automatically.
         "java.home": "${containerEnv:JAVA_HOME}",
         "java.configuration.runtimes": [
            {
