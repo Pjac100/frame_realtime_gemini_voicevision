@@ -1,38 +1,57 @@
 {
   "name": "android-codespace",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+
+  // Build from your existing Dockerfile
+  "build": { "dockerfile": "Dockerfile" },
 
   "features": {
-    // Java 17 like the workflow's `actions/setup-java@v4`
-    "ghcr.io/devcontainers/features/java:1": { "version": "17" },
+    // Core CLI utilities, git, zsh, curl, etc.
+    "ghcr.io/devcontainers/features/common-utils:2": {},
 
-    // Tiny helpers (curl, git, zsh, etc.)
-    "ghcr.io/devcontainers/features/common-utils:2": {}
+    // JDK 17 + Gradle CLI
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installGradle": true            // puts gradle on PATH
+    },
+
+    // Android SDK (API-34) + cmdline-tools
+    "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
+      "version": "34.0.0"
+    }
   },
 
-  // Everything else (Flutter + writable Android SDK) is installed by the
-  // scripts that run *inside* the container, as the non-root `codespace` user.
+  // Commands that run *inside* the container right after it’s built
   "postCreateCommand": [
-    "bash .devcontainer/scripts/install_flutter.sh    3.24.0",
-    "bash .devcontainer/scripts/install_user_sdk.sh   33.0.1 33 31 29 26.3.11579264"
+    // 1️⃣ Make every helper script executable
+    "chmod +x .devcontainer/scripts/*.sh",
+
+    // 2️⃣ Install Flutter SDK (cached in $HOME/flutter)
+    "bash .devcontainer/scripts/install_flutter.sh 3.24.0",
+
+    // 3️⃣ Pull the same side-by-side NDK & build-tool set your CI uses
+    "bash .devcontainer/scripts/install_user_sdk.sh 33.0.1 33 31 29 26.3.11579264"
   ],
 
+  // Add Flutter to every shell’s PATH
   "containerEnv": {
-    // Add Flutter & SDK to every shell PATH once the scripts have run
-    "PATH": "${containerEnv:PATH}:$HOME/flutter/bin:$HOME/android-sdk/platform-tools"
+    "PATH": "${containerEnv:PATH}:${HOME}/flutter/bin"
   },
 
+  // VS Code extensions pre-installed in the Codespace
   "customizations": {
     "vscode": {
       "extensions": [
-        "dart-code.flutter",
         "vscjava.vscode-gradle",
         "eamodio.gitlens",
-        "ms-vscode.cpptools"
+        "ms-vscode.cpptools",
+        "dart-code.flutter"
       ]
     }
   },
 
+  // Ports you usually forward when debugging
   "forwardPorts": [5555, 8080],
+
+  // Default user
   "remoteUser": "codespace"
 }
