@@ -1,58 +1,41 @@
-# syntax=docker/dockerfile:1
-ARG VARIANT="22.04"
-FROM mcr.microsoft.com/devcontainers/base:ubuntu-${VARIANT}
+{
+  "name": "Flutter-Android Dev",
 
-######################################################################
-# ---- versions that match your CI log ------------------------------
-######################################################################
-ARG FLUTTER_VERSION=3.24.0
-ARG ANDROID_PLATFORM=34           # gives platforms;android-34
-ARG BUILD_TOOLS_VERSION=33.0.1
-ARG NDK_VERSION=26.3.11579264
-######################################################################
+  // Base image = the same Ubuntu-24.04 image your CI runner used
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
 
-ENV DEBIAN_FRONTEND=noninteractive
-USER root
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils": "2",
+    "ghcr.io/devcontainers/features/java": "1",
 
-# ---------- core packages ------------------------------------------
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl wget unzip git git-lfs ca-certificates \
-        openjdk-17-jdk \
-        zlib1g-dev libgl1-mesa-dev clang cmake ninja-build pkg-config && \
-    rm -rf /var/lib/apt/lists/*
+    // Android SDK pinned to the tag that worked in your CI logs
+    "ghcr.io/casl0/devcontainer-features/android-sdk": {
+      "version": "34",
+      "ndk": "26.3.11579264",
+      "cmdline-tools": "11076708",
+      "cmake": "3.22.1"
+    }
+  },
 
-# ---------- Android SDK --------------------------------------------
-ENV ANDROID_SDK_ROOT=/opt/android-sdk-linux
-RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" && \
-    curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-      -o /tmp/cmdline-tools.zip && \
-    unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_SDK_ROOT}/cmdline-tools" && \
-    mv "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" \
-       "${ANDROID_SDK_ROOT}/cmdline-tools/latest" && \
-    rm /tmp/cmdline-tools.zip
+  /* -----------------------------------------------------------
+     Run the Flutter installer **via bash** so the script itself
+     does NOT need the executable bit set in the repo.
+  ----------------------------------------------------------- */
+  "postCreateCommand": "bash .devcontainer/scripts/setup_flutter.sh",
 
-ENV PATH=${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:$PATH
+  "customizations": {
+    "codespaces": {
+      // Freeze the CLI at 0.74.3 (avoids the chmod bug)
+      "devcontainerCLI": "0.74.3"
+    },
+    "vscode": {
+      "extensions": [
+        "dart-code.flutter",
+        "dart-code.dart-code"
+      ]
+    }
+  },
 
-# Accept licenses + install the exact bits your Actions run pulled
-RUN yes | sdkmanager --licenses > /dev/null && \
-    sdkmanager "platform-tools" \
-               "platforms;android-${ANDROID_PLATFORM}" \
-               "build-tools;${BUILD_TOOLS_VERSION}" \
-               "ndk;${NDK_VERSION}" \
-               "patcher;v4"
-
-# ---------- Flutter -------------------------------------------------
-ENV FLUTTER_HOME=/opt/flutter
-RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
-      https://github.com/flutter/flutter.git "${FLUTTER_HOME}"
-
-ENV PATH=${FLUTTER_HOME}/bin:$PATH
-RUN flutter config --no-analytics && flutter precache
-
-# ---------- non-root user (Codespaces default) ----------------------
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=1000
-RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd  --uid $USER_UID --gid $USER_GID -m $USERNA
+  "forwardPorts": [3000],
+  "remoteUser": "vscode"
+}
