@@ -1,0 +1,66 @@
+{
+  "name": "Android CI Parity (Ubuntu 22.04)",
+  // 1. Select the base OS image to match the GitHub runner.
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+
+  // 2. Enforce hardware specifications to match the standard public repo runner.
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+
+  "features": {
+    // 3. Install the correct Java version (JDK 17) required by the project's Gradle version.
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installMaven": "false",
+      "installGradle": "true"
+    },
+    // 4. Install the Android SDK, specifying platform and build tools versions from your Gradle file.
+    "ghcr.io/NordcomInc/devcontainer-features/android-sdk:1": {
+      "version": "latest",
+      "buildToolsVersion": "34.0.0",
+      "platformVersion": "34",
+      "cmake": "true"
+    }
+  },
+
+  // 5. Set the required environment variables for Android and Java tools to function correctly.
+  "containerEnv": {
+    "ANDROID_HOME": "/opt/android-sdk",
+    "ANDROID_SDK_ROOT": "/opt/android-sdk",
+    // Note: This path is the default for the Microsoft Java feature.
+    "JAVA_HOME": "/usr/lib/jvm/ms-jdk-17-linux-amd64"
+  },
+
+  // 6. CRITICAL: Automate SDK license acceptance and pre-warm the Gradle dependency cache.
+  "postCreateCommand": "yes | sdkmanager --licenses && ./gradlew :app:dependencies",
+
+  // 7. Auto-install essential VS Code extensions for a seamless IDE experience.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-gradle",
+        "naco-siren.gradle-language",
+        "fwcd.kotlin",
+        "github.codespaces"
+      ],
+      "settings": {
+        // Ensure VS Code uses the correct JDK.
+        "java.home": "/usr/lib/jvm/ms-jdk-17-linux-amd64",
+        "java.configuration.runtimes": [
+          {
+            "name": "JavaSE-17",
+            "path": "/usr/lib/jvm/ms-jdk-17-linux-amd64",
+            "default": true
+          }
+        ]
+      }
+    }
+  },
+  // Forward the ADB port to allow connection from your local machine.
+  "forwardPorts": [5037]
+}
