@@ -1,57 +1,58 @@
-{
-  "name": "android-codespace",
+# syntax=docker/dockerfile:1
+ARG VARIANT="22.04"
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-${VARIANT}
 
-  // Build from your existing Dockerfile
-  "build": { "dockerfile": "Dockerfile" },
+######################################################################
+# ---- versions that match your CI log ------------------------------
+######################################################################
+ARG FLUTTER_VERSION=3.24.0
+ARG ANDROID_PLATFORM=34           # gives platforms;android-34
+ARG BUILD_TOOLS_VERSION=33.0.1
+ARG NDK_VERSION=26.3.11579264
+######################################################################
 
-  "features": {
-    // Core CLI utilities, git, zsh, curl, etc.
-    "ghcr.io/devcontainers/features/common-utils:2": {},
+ENV DEBIAN_FRONTEND=noninteractive
+USER root
 
-    // JDK 17 + Gradle CLI
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
-      "installGradle": true            // puts gradle on PATH
-    },
+# ---------- core packages ------------------------------------------
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl wget unzip git git-lfs ca-certificates \
+        openjdk-17-jdk \
+        zlib1g-dev libgl1-mesa-dev clang cmake ninja-build pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
-    // Android SDK (API-34) + cmdline-tools
-    "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
-      "version": "34.0.0"
-    }
-  },
+# ---------- Android SDK --------------------------------------------
+ENV ANDROID_SDK_ROOT=/opt/android-sdk-linux
+RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" && \
+    curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+      -o /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_SDK_ROOT}/cmdline-tools" && \
+    mv "${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools" \
+       "${ANDROID_SDK_ROOT}/cmdline-tools/latest" && \
+    rm /tmp/cmdline-tools.zip
 
-  // Commands that run *inside* the container right after it’s built
-  "postCreateCommand": [
-    // 1️⃣ Make every helper script executable
-    "chmod +x .devcontainer/scripts/*.sh",
+ENV PATH=${ANDROID_SDK_ROOT}/platform-tools:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:$PATH
 
-    // 2️⃣ Install Flutter SDK (cached in $HOME/flutter)
-    "bash .devcontainer/scripts/install_flutter.sh 3.24.0",
+# Accept licenses + install the exact bits your Actions run pulled
+RUN yes | sdkmanager --licenses > /dev/null && \
+    sdkmanager "platform-tools" \
+               "platforms;android-${ANDROID_PLATFORM}" \
+               "build-tools;${BUILD_TOOLS_VERSION}" \
+               "ndk;${NDK_VERSION}" \
+               "patcher;v4"
 
-    // 3️⃣ Pull the same side-by-side NDK & build-tool set your CI uses
-    "bash .devcontainer/scripts/install_user_sdk.sh 33.0.1 33 31 29 26.3.11579264"
-  ],
+# ---------- Flutter -------------------------------------------------
+ENV FLUTTER_HOME=/opt/flutter
+RUN git clone --depth 1 --branch "${FLUTTER_VERSION}" \
+      https://github.com/flutter/flutter.git "${FLUTTER_HOME}"
 
-  // Add Flutter to every shell’s PATH
-  "containerEnv": {
-    "PATH": "${containerEnv:PATH}:${HOME}/flutter/bin"
-  },
+ENV PATH=${FLUTTER_HOME}/bin:$PATH
+RUN flutter config --no-analytics && flutter precache
 
-  // VS Code extensions pre-installed in the Codespace
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "vscjava.vscode-gradle",
-        "eamodio.gitlens",
-        "ms-vscode.cpptools",
-        "dart-code.flutter"
-      ]
-    }
-  },
-
-  // Ports you usually forward when debugging
-  "forwardPorts": [5555, 8080],
-
-  // Default user
-  "remoteUser": "codespace"
-}
+# ---------- non-root user (Codespaces default) ----------------------
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd  --uid $USER_UID --gid $USER_GID -m $USERNA
