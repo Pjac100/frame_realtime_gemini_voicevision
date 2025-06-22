@@ -1,46 +1,42 @@
 {
-	// ────────────────────────────────────────────────
-	// Dev Container definition for
-	//   “frame_realtime_gemini_voicevision”
-	// ────────────────────────────────────────────────
-	"name": "Frame Realtime Gemini VoiceVision",
+  // ----------------------------------------------------------
+  //  Flutter / Android build environment – parity with
+  //  the “Build Cognitive Assistant APK” workflow
+  // ----------------------------------------------------------
+  "name": "Flutter Android CI Environment (ubuntu-22.04)",
 
-	// Use your existing Dockerfile (or remove this “build”
-	// block if you rely on the base image alone).
-	"build": {
-		"dockerfile": "Dockerfile",      // or "Dockerfile.extended"
-		"context": "..",
-		"args": {}                       // (unchanged)
-	},
+  // 1) Base image – already contains Android SDK + Flutter
+  //    (tag = Flutter SDK version so we pin to 3.24.0)
+  "image": "ghcr.io/sambyeol/flutter-devcontainer:3.24.0",
 
-	// ── Features ─────────────────────────────────────
-	"features": {
-		// 1) Shell / dot-files / common CLIs
-		"ghcr.io/devcontainers/features/common-utils": {
-			// keep the defaults you had; only show the one
-			// overridden option here for clarity
-			"installZsh": "false",
-			"username": "vscode"
-		},
+  // 2) Guarantee the Codespace has at least the same muscle
+  //    as the hosted runner (4 vCPU / 16 GB RAM)
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
 
-		// 2) **FIXED** Java – Temurin 17 LTS (works on Ubuntu 24.04)
-		"ghcr.io/devcontainers/features/java": {
-			"version": "17",
-			"jdkDistro": "tem"
-		},
+  // 3) Add Temurin JDK 17 exactly like actions/setup-java
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "distribution": "temurin",
+      "installGradle": "true",   // flutter build calls gradle
+      "installMaven": "false"
+    }
+  },
 
-		// 3) Android SDK (unchanged)
-		"ghcr.io/casl0/devcontainer-features/android-sdk": {
-			"version": "34",
-			"installLocation": "/home/vscode/android-sdk"
-		}
-	},
+  // 4) One-time licence acceptance + quick health check
+  "postCreateCommand": "yes | sdkmanager --licenses && flutter doctor -v",
 
-	// ── Post-create actions ──────────────────────────
-	// Gradle 8.7 is compatible with Temurin 17.
-	"postCreateCommand": "sdk install gradle 8.7 || true",
-
-	// Work as the non-root user that the common-utils
-	// feature already created.
-	"remoteUser": "vscode"
+  // 5) VS Code goodies – identical for every developer
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dart-code.dart-code",
+        "dart-code.flutter"
+      ]
+    }
+  }
 }
