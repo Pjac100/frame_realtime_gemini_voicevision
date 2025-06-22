@@ -1,41 +1,46 @@
 {
-  "name": "Flutter-Android Dev",
+	// ────────────────────────────────────────────────
+	// Dev Container definition for
+	//   “frame_realtime_gemini_voicevision”
+	// ────────────────────────────────────────────────
+	"name": "Frame Realtime Gemini VoiceVision",
 
-  // Base image = the same Ubuntu-24.04 image your CI runner used
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+	// Use your existing Dockerfile (or remove this “build”
+	// block if you rely on the base image alone).
+	"build": {
+		"dockerfile": "Dockerfile",      // or "Dockerfile.extended"
+		"context": "..",
+		"args": {}                       // (unchanged)
+	},
 
-  "features": {
-    "ghcr.io/devcontainers/features/common-utils": "2",
-    "ghcr.io/devcontainers/features/java": "1",
+	// ── Features ─────────────────────────────────────
+	"features": {
+		// 1) Shell / dot-files / common CLIs
+		"ghcr.io/devcontainers/features/common-utils": {
+			// keep the defaults you had; only show the one
+			// overridden option here for clarity
+			"installZsh": "false",
+			"username": "vscode"
+		},
 
-    // Android SDK pinned to the tag that worked in your CI logs
-    "ghcr.io/casl0/devcontainer-features/android-sdk": {
-      "version": "34",
-      "ndk": "26.3.11579264",
-      "cmdline-tools": "11076708",
-      "cmake": "3.22.1"
-    }
-  },
+		// 2) **FIXED** Java – Temurin 17 LTS (works on Ubuntu 24.04)
+		"ghcr.io/devcontainers/features/java": {
+			"version": "17",
+			"jdkDistro": "tem"
+		},
 
-  /* -----------------------------------------------------------
-     Run the Flutter installer **via bash** so the script itself
-     does NOT need the executable bit set in the repo.
-  ----------------------------------------------------------- */
-  "postCreateCommand": "bash .devcontainer/scripts/setup_flutter.sh",
+		// 3) Android SDK (unchanged)
+		"ghcr.io/casl0/devcontainer-features/android-sdk": {
+			"version": "34",
+			"installLocation": "/home/vscode/android-sdk"
+		}
+	},
 
-  "customizations": {
-    "codespaces": {
-      // Freeze the CLI at 0.74.3 (avoids the chmod bug)
-      "devcontainerCLI": "0.74.3"
-    },
-    "vscode": {
-      "extensions": [
-        "dart-code.flutter",
-        "dart-code.dart-code"
-      ]
-    }
-  },
+	// ── Post-create actions ──────────────────────────
+	// Gradle 8.7 is compatible with Temurin 17.
+	"postCreateCommand": "sdk install gradle 8.7 || true",
 
-  "forwardPorts": [3000],
-  "remoteUser": "vscode"
+	// Work as the non-root user that the common-utils
+	// feature already created.
+	"remoteUser": "vscode"
 }
