@@ -1,59 +1,41 @@
 {
-  "name": "Android CI Parity (Ubuntu 22.04)",
+  // ──────────────────────────────────────────────────────────────
+  //  Flutter 3.32.4  +  Android SDK (no emulator)  +  JDK 17
+  //  * Everything else is pulled in by the postCreate script
+  // ──────────────────────────────────────────────────────────────
+  "name": "Dart + Flutter 3.32 + Android SDK",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
 
-  "hostRequirements": {
-    "cpus": 4,
-    "memory": "16gb",
-    "storage": "32gb"
-  },
-
+  // Install a JDK the easy way
   "features": {
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "17",
-      "installMaven": "false",
-      "installGradle": "true"
-    },
-    "ghcr.io/NordcomInc/devcontainer-features/android-sdk:1": {
-      "version": "latest",
-      "buildToolsVersion": "34.0.0",
-      "platformVersion": "34",
-      "cmake": "true"
+      "version": "17"
     }
   },
 
-  // CORRECTED: Removed the manual JAVA_HOME definition.
-  // The Java feature will now set this automatically and correctly.
-  "containerEnv": {
-    "ANDROID_HOME": "/opt/android-sdk",
-    "ANDROID_SDK_ROOT": "/opt/android-sdk"
-  },
+  // Run the same setup logic you tested manually.
+  // Keep the script right next to this file:  .devcontainer/setup.sh
+  "postCreateCommand": "bash .devcontainer/setup.sh",
 
-  "postCreateCommand": "yes | sdkmanager --licenses && ./gradlew :app:dependencies",
-
+  // VS Code niceties
   "customizations": {
     "vscode": {
       "extensions": [
-        "vscjava.vscode-java-pack",
-        "redhat.java",
-        "vscjava.vscode-gradle",
-        "naco-siren.gradle-language",
-        "fwcd.kotlin",
-        "github.codespaces"
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter"
       ],
       "settings": {
-        // This setting is still correct. It will now use the correct JAVA_HOME
-        // variable that the Java feature provides automatically.
-        "java.home": "${containerEnv:JAVA_HOME}",
-        "java.configuration.runtimes": [
-           {
-             "name": "JavaSE-17",
-             "path": "${containerEnv:JAVA_HOME}",
-             "default": true
-           }
-        ]
+        // so VS Code auto-detects the SDKs
+        "dart.flutterSdkPath": "/home/codespace/flutter",
+        "dart.sdkPath": "/home/codespace/flutter/bin/cache/dart-sdk"
       }
     }
+  },
+
+  // Codespaces default user
+  "remoteUser": "codespace"
+}
+
   },
 
   "forwardPorts": [5037]
