@@ -1,0 +1,37 @@
+{
+  // ──────────────────────────────────────────────────────────────
+  //  Flutter 3.32.4  +  Android SDK (no emulator)  +  JDK 17
+  //  * Everything else is pulled in by the postCreate script
+  // ──────────────────────────────────────────────────────────────
+  "name": "Dart + Flutter 3.32 + Android SDK",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+
+  // Install a JDK the easy way
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17"
+    }
+  },
+
+  // Run the same setup logic you tested manually.
+  // Keep the script right next to this file:  .devcontainer/setup.sh
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+
+  // VS Code niceties
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter"
+      ],
+      "settings": {
+        // so VS Code auto-detects the SDKs
+        "dart.flutterSdkPath": "/home/codespace/flutter",
+        "dart.sdkPath": "/home/codespace/flutter/bin/cache/dart-sdk"
+      }
+    }
+  },
+
+  // Codespaces default user
+  "remoteUser": "codespace"
+}
