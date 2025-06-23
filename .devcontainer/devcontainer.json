@@ -1,42 +1,44 @@
 {
-  // ──────────────────────────────────────────────────────────────
-  //  Flutter 3.32.4  +  Android SDK (no emulator)  +  JDK 17
-  //  * Everything else is pulled in by the postCreate script
-  // ──────────────────────────────────────────────────────────────
-  "name": "Dart + Flutter 3.32 + Android SDK",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "name": "android-flutter-codespace",
 
-  // Install a JDK the easy way
+  // ✅ Flutter 3.x, Dart SDK, Java 17, Android SDK & ADB already installed.
+  //    See: https://github.com/cirruslabs/docker-images/tree/master/flutter
+  "image": "ghcr.io/cirruslabs/flutter:3.22.1",  // pin the tag you prefer
+
   "features": {
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "17"
+    // CLI niceties, git, zsh, curl, etc.
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+
+    // Use the full Android SDK for API-34 (the Cirrus image ships 34 by default,
+    // but including the Feature keeps `sdkmanager` available for future updates)
+    "ghcr.io/casl0/devcontainer-features/android-sdk:1": {
+      "version": "34.0.0"
     }
   },
 
-  // Run the same setup logic you tested manually.
-  // Keep the script right next to this file:  .devcontainer/setup.sh
-  "postCreateCommand": "bash .devcontainer/setup.sh",
+  // Run once the container is up
+  "postCreateCommand": [
+    // Accept Android licences non-interactively
+    "yes | sdkmanager --licenses",
 
-  // VS Code niceties
+    // Make sure Flutter itself is sane
+    "flutter doctor -v"
+  ],
+
   "customizations": {
     "vscode": {
       "extensions": [
-        "Dart-Code.dart-code",
-        "Dart-Code.flutter"
-      ],
-      "settings": {
-        // so VS Code auto-detects the SDKs
-        "dart.flutterSdkPath": "/home/codespace/flutter",
-        "dart.sdkPath": "/home/codespace/flutter/bin/cache/dart-sdk"
-      }
+        "dart-code.flutter",
+        "vscjava.vscode-gradle",
+        "eamodio.gitlens",
+        "ms-vscode.cpptools"
+      ]
     }
   },
 
-  // Codespaces default user
+  // Forward the most common dev ports
+  "forwardPorts": [5555, 8080],
+
+  // Default user inside the container
   "remoteUser": "codespace"
-}
-
-  },
-
-  "forwardPorts": [5037]
 }
