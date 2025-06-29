@@ -1,8 +1,8 @@
 plugins {
-    id "com.android.application"
-    id "kotlin-android"
+    id("com.android.application")
+    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
-    id "dev.flutter.flutter-gradle-plugin"
+    id("dev.flutter.flutter-gradle-plugin")
 }
 
 def localProperties = new Properties()
@@ -25,25 +25,27 @@ if (flutterVersionName == null) {
 
 android {
     namespace = "com.example.frame_realtime_gemini_voicevision"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     defaultConfig {
         applicationId = "com.example.frame_realtime_gemini_voicevision"
-        minSdk = 26 // raw_sound(26)
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutterVersionCode.toInteger()
+        minSdk = 26
+        targetSdk = 34
+        versionCode = flutterVersionCode.toInt()
         versionName = flutterVersionName
     }
 
     buildTypes {
-        release {
-            signingConfig = signingConfigs.debug
+        getByName("release") {
+            // TODO: Add your own signing config for the release build.
+            // See https://docs.flutter.dev/deployment/android#signing-the-app
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
@@ -53,14 +55,6 @@ flutter {
 }
 
 dependencies {
-    // Replaced '$kotlin_version' with a specific version number to fix the build error.
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.23"
-
-    // Standard AndroidX and testing dependencies often included in Flutter projects.
-    implementation 'androidx.core:core-ktx:1.9.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    // No additional dependencies are needed here for a standard Flutter project.
+    // The Flutter Gradle plugin manages the Kotlin standard library and other core dependencies.
 }
