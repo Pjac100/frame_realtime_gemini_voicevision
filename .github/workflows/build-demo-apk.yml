@@ -4,13 +4,11 @@ name: Build Cognitive Assistant APK
 on:
   push:
     branches:
-      - final-working-code # This now watches our new, clean branch
+      - refactor-v2  # CORRECTED: This now watches your current branch
       - main
-      - temp-stable-build
   pull_request:
     branches:
       - main
-      - temp-stable-build
   workflow_dispatch: # Allows you to trigger this workflow manually
 
 jobs:
@@ -61,6 +59,10 @@ jobs:
       # 8. Upload the generated APK as an artifact
       - name: Upload Demo APK Artifact
         uses: actions/upload-artifact@v4
+        with:
+          name: cognitive-assistant-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
         with:
           name: cognitive-assistant-debug.apk
           path: build/app/outputs/flutter-apk/app-debug.apk
