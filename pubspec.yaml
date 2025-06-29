@@ -4,75 +4,54 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=3.22.0"
+  # Updated to reflect your local SDK version
+  sdk: ">=3.8.1 <4.0.0"
 
-#################################
-# Runtime dependencies
-################################
 dependencies:
   flutter:
     sdk: flutter
 
-  # Brilliant-Frame stack
+  # Latest stable versions of all packages
   simple_frame_app: ^7.1.0
   frame_msg:        ^2.0.0
+  flutter_blue_plus: ^1.35.5
 
-  # Bluetooth LE
-  flutter_blue_plus: ^1.35.3
-
-  # On-device ML -> TO BE ADDED IN A LATER STEP
-  # tflite_flutter:            ^0.10.4
-  # tflite_flutter_processing: ^0.4.1
-  # google_mlkit_text_recognition: ^0.11.0
-  # image: ^4.5.2
-
+  # On-device ML
+  tflite_flutter:            ^0.11.0
+  google_mlkit_text_recognition: ^0.15.0
+  image: ^4.5.4
+  
   # Local database
-  objectbox:              ^4.2.0
-  objectbox_flutter_libs: ^4.2.0
+  objectbox:              ^4.3.0
+  objectbox_flutter_libs: ^4.3.0
 
   # Platform utilities
-  shared_preferences:      ^2.3.2
-  share_plus:              ^10.1.0
-  flutter_foreground_task: ^6.5.0
-  flutter_pcm_sound:       ^3.1.1
-  web_socket_channel:      ^3.0.1
-  path_provider:           ^2.1.4
-  path:                    1.9.0
+  shared_preferences:      ^2.5.3
+  share_plus:              ^11.0.0
+  flutter_foreground_task: ^9.1.0
+  flutter_pcm_sound:       ^3.1.7
+  web_socket_channel:      ^3.0.3
+  path_provider:           ^2.1.5
+  path:                    ^1.9.1
   uuid:                    ^4.5.1
   rxdart:                  ^0.28.0
   logging:                 ^1.3.0
 
-#################################
-# Dev-only dependencies
-################################
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints:   ^3.0.2
-  build_runner:    ^2.4.13
-  objectbox_generator: ^4.2.0
+  flutter_lints:   ^6.0.0
+  
+  # Latest versions compatible with Dart 3.8
+  build_runner:    ^2.4.15
+  objectbox_generator: ^4.3.0
 
-#################################
-# Dependency overrides
-#################################
-dependency_overrides:
-  path: 1.9.0
+# No longer need the override because we are using the latest versions of all packages
+# dependency_overrides:
+#   path: 1.9.0
 
-#################################
-# Flutter assets
-################################
 flutter:
   uses-material-design: true
   assets:
-    # Original Lua assets
-    - packages/frame_msg/lua/battery.min.lua
-    - packages/frame_msg/lua/data.min.lua
-    - packages/frame_msg/lua/camera.min.lua
-    - packages/frame_msg/lua/code.min.lua
-    - packages/frame_msg/lua/plain_text.min.lua
-    - assets/frame_app.min.lua
-    
-    # AI Model assets -> TO BE ADDED IN A LATER STEP
-    # - assets/models/mobilebert_embedding.tflite
-    # - assets/models/vocab.txt
+    - assets/models/mobilebert_embedding.tflite
+    - assets/models/vocab.txt
