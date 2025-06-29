@@ -4,28 +4,22 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  # Updated to reflect your local SDK version
+  # This correctly reflects your modern local environment
   sdk: ">=3.8.1 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Latest stable versions of all packages
+  # Latest stable versions of all key packages
   simple_frame_app: ^7.1.0
   frame_msg:        ^2.0.0
   flutter_blue_plus: ^1.35.5
-
-  # On-device ML
   tflite_flutter:            ^0.11.0
   google_mlkit_text_recognition: ^0.15.0
   image: ^4.5.4
-  
-  # Local database
   objectbox:              ^4.3.0
   objectbox_flutter_libs: ^4.3.0
-
-  # Platform utilities
   shared_preferences:      ^2.5.3
   share_plus:              ^11.0.0
   flutter_foreground_task: ^9.1.0
@@ -41,14 +35,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints:   ^6.0.0
-  
-  # Latest versions compatible with Dart 3.8
   build_runner:    ^2.4.15
   objectbox_generator: ^4.3.0
-
-# No longer need the override because we are using the latest versions of all packages
-# dependency_overrides:
-#   path: 1.9.0
 
 flutter:
   uses-material-design: true
