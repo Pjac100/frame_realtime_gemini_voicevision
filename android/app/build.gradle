@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle plugin must come last.
+    // Flutter plugin **must** come last
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -15,6 +15,7 @@ def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "
 
 android {
     namespace "com.example.frame_realtime_gemini_voicevision"
+
     compileSdkVersion 34
 
     defaultConfig {
