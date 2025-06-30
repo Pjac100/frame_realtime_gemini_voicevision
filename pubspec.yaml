@@ -1,25 +1,30 @@
 name: frame_realtime_gemini_voicevision
-description: "Connects to Frame, streams audio from the Frame microphone and photos from its camera in a websockets conversation with the Gemini Realtime API"
-publish_to: 'none'
+description: >
+  Connects to Frame, streams audio from the Frame microphone and photos from its
+  camera in a WebSocket conversation with the Gemini Realtime API.
+publish_to: "none"
 version: 0.1.1
 
 environment:
-  sdk: '>=3.4.3 <4.0.0'
+  sdk: ">=3.4.3 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # Frame / Bluetooth stack
-  flutter_blue_plus: ^1.32.12          # BLE
-  flutter_bluetooth_serial: ^0.4.0     # classic Bluetooth – latest available
-                                       
-  # Frame SDK & utilities
+  # Bluetooth stacks
+  flutter_blue_plus: ^1.32.12           # BLE
+  flutter_bluetooth_serial: ^0.4.0      # Classic BT (latest on pub.dev)
+
+  # Frame SDK
   simple_frame_app: ^7.0.0
   frame_msg: ^2.0.0
+
+  # Core utilities
   logging: ^1.2.0
   shared_preferences: ^2.2.2
   share_plus: ^10.1.0
+  permission_handler: ^11.3.1
 
   # Real-time pipeline
   flutter_pcm_sound: ^3.1.1
@@ -27,9 +32,6 @@ dependencies:
 
   # Foreground service (8.x API)
   flutter_foreground_task: ^8.0.0
-
-  # Runtime permissions
-  permission_handler: ^11.3.1
 
   # ObjectBox
   objectbox: ^4.0.0
