@@ -3,7 +3,7 @@ import 'package:logging/logging.dart';
 
 final _log = Logger('ForegroundService');
 
-/// One-time plugin setup – call from `main()` **before** runApp().
+/// One-time plugin setup. Call from `main()` **before** runApp().
 void initializeForegroundService() {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
@@ -18,7 +18,7 @@ void initializeForegroundService() {
       showNotification: false,
       playSound: false,
     ),
-    // `isOnceEvent` was removed → use the *once* helper.
+    // `isOnceEvent` removed → use the helper
     foregroundTaskOptions: const ForegroundTaskOptions(
       eventAction: ForegroundTaskEventAction.once(),
     ),
@@ -59,7 +59,7 @@ class _FrameTaskHandler extends TaskHandler {
         'FG-service started ${timestamp.toLocal()} (starter: ${starter.name})');
   }
 
-  // With `eventAction.once()` this is not used, but keep for future updates.
+  /// With `eventAction.once()` this normally isn’t called, but keep for future use.
   @override
   void onRepeatEvent(DateTime timestamp) =>
       _log.fine('FG repeat @ ${timestamp.toLocal()}');
