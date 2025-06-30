@@ -11,9 +11,9 @@ dependencies:
     sdk: flutter
 
   # Frame / Bluetooth stack
-  flutter_blue_plus: ^1.32.12
-  flutter_bluetooth_serial: ^1.0.0
-
+  flutter_blue_plus: ^1.32.12          # BLE
+  flutter_bluetooth_serial: ^0.4.0     # classic Bluetooth – latest available
+                                       
   # Frame SDK & utilities
   simple_frame_app: ^7.0.0
   frame_msg: ^2.0.0
