@@ -19,7 +19,7 @@
         android:label="Frame Realtime Gemini VoiceVision"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Foreground-task service (new API requires explicit types) -->
+        <!-- Foreground-task service (flutter_foreground_task 8.x) -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
