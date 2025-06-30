@@ -1,3 +1,63 @@
+import 'package:logging/logging.dart';
+
+import '../main.dart';              // global ObjectBox store
+import '../model/document_entity.dart';
+import '../objectbox.g.dart';
+
+final _log = Logger('VectorDbService');
+
+class VectorDbService {
+  late final Box<Document> _documentBox;
+
+  /// Optional event logger – defaults to a no-op so tests can omit it.
+  VectorDbService([void Function(String msg)? eventLogger])
+      : _eventLogger = eventLogger ?? (_) {};
+
+  final void Function(String) _eventLogger;
+
+  // ----------------------------------------------------------------
+  Future<void> initialize() async {
+    _documentBox = store.box<Document>();
+    _eventLogger('VectorDB: Service initialised.');
+    _log.info('ObjectBox box ready.');
+  }
+
+  Future<void> addEmbedding({
+    required String id,
+    required List<double> embedding,
+    required Map<String, dynamic> metadata,
+  }) async {
+    final doc = Document(
+      textContent: metadata['source'] ?? id,
+      embedding: embedding,
+    );
+    _documentBox.put(doc);
+    _eventLogger('VectorDB: Added embedding for "${doc.textContent}".');
+  }
+
+  Future<List<Map<String, Object?>>> querySimilarEmbeddings({
+    required List<double> queryEmbedding,
+    required int topK,
+  }) async {
+    final query = _documentBox
+        .query(Document_.embedding.nearestNeighborsF32(queryEmbedding, topK))
+        .build();
+    final results = query.findWithScores();
+    query.close();
+
+    _eventLogger('VectorDB: Found ${results.length} similar documents.');
+    return results
+        .map((r) => {
+              'document': r.object.textContent,
+              'score': r.score,
+            })
+        .toList();
+  }
+
+  Future<void> dispose() async {
+    _log.info('VectorDbService disposed.');
+  }
+}
 // lib/services/vector_db_service.dart
 import 'package:logging/logging.dart';
 
