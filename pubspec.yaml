@@ -12,9 +12,8 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Bluetooth stacks
+  # Bluetooth stack (BLE only; classic Serial plugin removed)
   flutter_blue_plus: ^1.32.12           # BLE
-  flutter_bluetooth_serial: ^0.4.0      # Classic BT (latest on pub.dev)
 
   # Frame SDK
   simple_frame_app: ^7.0.0
@@ -30,7 +29,7 @@ dependencies:
   flutter_pcm_sound: ^3.1.1
   web_socket_channel: ^2.4.0
 
-  # Foreground service (8.x API)
+  # Foreground service (9.x API)
   flutter_foreground_task: ^9.1.0
 
   # ObjectBox
