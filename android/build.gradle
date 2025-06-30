@@ -1,4 +1,4 @@
-// Top-level build file
+// Top-level Gradle file
 
 buildscript {
     ext.kotlin_version = '1.9.10'
@@ -20,7 +20,7 @@ allprojects {
         mavenCentral()
     }
 
-    // Preserve auto-namespace feature already present
+    // Preserve Flutter-generated automatic namespaces for modules
     subprojects {
         afterEvaluate { project ->
             if (project.hasProperty('android')) {
@@ -34,8 +34,10 @@ allprojects {
     }
 }
 
-rootProject.buildDir = "../build"
+rootProject.buildDir = '../build'
 subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
-subprojects { project.evaluationDependsOn(":app") }
+subprojects { project.evaluationDependsOn(':app') }
 
-tasks.register("clean", Delete) { delete rootProject.buildDir }
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}
