@@ -1,54 +1,76 @@
-import 'dart:isolate';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:logging/logging.dart';
 
-final _log = Logger("Foreground task");
+final _log = Logger('ForegroundService');
 
+/// One-time plugin setup – call from `main()` **before** runApp().
 void initializeForegroundService() {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'foreground_service',
       channelName: 'Frame Service',
+      channelDescription:
+          'Keeps Frame connected while streaming voice & vision data.',
       channelImportance: NotificationChannelImportance.MIN,
-      iconData: null,
+      onlyAlertOnce: true,
     ),
     iosNotificationOptions: const IOSNotificationOptions(
       showNotification: false,
       playSound: false,
     ),
-    foregroundTaskOptions: const ForegroundTaskOptions(isOnceEvent: true),
+    // `isOnceEvent` was removed → use the *once* helper.
+    foregroundTaskOptions: const ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.once(),
+    ),
   );
 }
 
-Future<void> startForegroundService() async {
-  if (!(await FlutterForegroundTask.isRunningService)) {
-    FlutterForegroundTask.startService(
-      notificationTitle: 'Frame is connected',
-      notificationText: 'Tap to return to the app',
-      callback: _startForegroundCallback,
-    );
+/// Start (or restart) the Android foreground service.
+Future<ServiceRequestResult> startForegroundService() async {
+  if (await FlutterForegroundTask.isRunningService) {
+    return FlutterForegroundTask.restartService();
   }
+
+  return FlutterForegroundTask.startService(
+    serviceId: 256,
+    serviceTypes: [
+      ForegroundServiceTypes.dataSync,
+      ForegroundServiceTypes.remoteMessaging,
+    ],
+    notificationTitle: 'Frame realtime assistant',
+    notificationText: 'Processing voice & vision data',
+    notificationIcon: null,
+    notificationButtons: [
+      const NotificationButton(id: 'stop', text: 'Stop'),
+    ],
+    callback: _startForegroundCallback,
+  );
 }
 
 @pragma('vm:entry-point')
 void _startForegroundCallback() {
-  FlutterForegroundTask.setTaskHandler(_ForegroundFirstTaskHandler());
+  FlutterForegroundTask.setTaskHandler(_FrameTaskHandler());
 }
 
-class _ForegroundFirstTaskHandler extends TaskHandler {
+class _FrameTaskHandler extends TaskHandler {
   @override
-  void onStart(DateTime timestamp, SendPort? sendPort) async {
-    _log.info("Starting foreground task");
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    _log.info(
+        'FG-service started ${timestamp.toLocal()} (starter: ${starter.name})');
+  }
+
+  // With `eventAction.once()` this is not used, but keep for future updates.
+  @override
+  void onRepeatEvent(DateTime timestamp) =>
+      _log.fine('FG repeat @ ${timestamp.toLocal()}');
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    _log.info('FG-service destroyed (timeout=$isTimeout)');
   }
 
   @override
-  void onRepeatEvent(DateTime timestamp, SendPort? sendPort) async {
-    _log.info("Foreground repeat event triggered");
-  }
-
-  @override
-  void onDestroy(DateTime timestamp, SendPort? sendPort) async {
-    _log.info("Destroying foreground task");
-    FlutterForegroundTask.stopService();
+  void onNotificationButtonPressed(String id) {
+    if (id == 'stop') FlutterForegroundTask.stopService();
   }
 }
