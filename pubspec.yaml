@@ -22,14 +22,14 @@ dependencies:
   # Core utilities
   logging: ^1.2.0
   shared_preferences: ^2.2.2
-  permission_handler: ^11.3.1
-  share_plus: ^11.0.0                  # ✅ v2 embedding
+  permission_handler: ^12.0.0+1        # v2-ready
+  share_plus: ^11.0.0                  # v2-ready
 
   # Real-time pipeline
-  flutter_pcm_sound: ^3.1.7            # ✅ v2 embedding
+  flutter_pcm_sound: ^3.1.6            # v2-ready
   web_socket_channel: ^2.4.0
 
-  # Foreground service (v2 embedding already)
+  # Foreground service
   flutter_foreground_task: ^9.1.0
 
   # ML Kit (v2 embedding)
@@ -52,11 +52,14 @@ dev_dependencies:
   build_runner: ^2.4.0
   objectbox_generator: ^4.0.0
 
-# ───── force v2-ready builds even if a transitive dep pins lower
+# ──────────────────────────
+# Force v2-ready versions
+# ──────────────────────────
 dependency_overrides:
+  permission_handler: 12.0.0+1
   share_plus: 11.0.0
   share_plus_platform_interface: 6.0.0
-  flutter_pcm_sound: 3.1.7
+  flutter_pcm_sound: 3.1.6
   google_mlkit_text_recognition: 0.15.0
   google_mlkit_commons: 0.11.0
 
