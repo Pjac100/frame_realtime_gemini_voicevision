@@ -12,7 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Bluetooth stack (BLE only)
+  # Bluetooth (BLE only)
   flutter_blue_plus: ^1.32.12
 
   # Frame SDK
@@ -22,14 +22,14 @@ dependencies:
   # Core utilities
   logging: ^1.2.0
   shared_preferences: ^2.2.2
-  share_plus: ^11.0.0               # v2-ready
   permission_handler: ^11.3.1
+  share_plus: ^11.0.0                  # ✅ v2 embedding
 
   # Real-time pipeline
-  flutter_pcm_sound: ^3.1.7         # latest stable, v2-ready
+  flutter_pcm_sound: ^3.1.7            # ✅ v2 embedding
   web_socket_channel: ^2.4.0
 
-  # Foreground service (v2 embedding)
+  # Foreground service (v2 embedding already)
   flutter_foreground_task: ^9.1.0
 
   # ML Kit (v2 embedding)
@@ -51,6 +51,14 @@ dev_dependencies:
   flutter_lints: ^3.0.0
   build_runner: ^2.4.0
   objectbox_generator: ^4.0.0
+
+# ───── force v2-ready builds even if a transitive dep pins lower
+dependency_overrides:
+  share_plus: 11.0.0
+  share_plus_platform_interface: 6.0.0
+  flutter_pcm_sound: 3.1.7
+  google_mlkit_text_recognition: 0.15.0
+  google_mlkit_commons: 0.11.0
 
 flutter:
   uses-material-design: true

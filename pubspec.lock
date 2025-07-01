@@ -729,7 +729,7 @@ packages:
     source: hosted
     version: "11.0.0"
   share_plus_platform_interface:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: share_plus_platform_interface
       sha256: "1032d392bc5d2095a77447a805aa3f804d2ae6a4d5eef5e6ebb3bd94c1bc19ef"
