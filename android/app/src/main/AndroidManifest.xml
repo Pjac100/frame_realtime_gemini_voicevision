@@ -1,46 +1,206 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.frame_realtime_gemini_voicevision">
 
-    <!-- Foreground-service & notification permissions -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - BLUETOOTH PERMISSIONS -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
+    <!-- Legacy Bluetooth permissions for Android < 31 -->
+    <uses-permission android:name="android.permission.BLUETOOTH" 
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" 
+        android:maxSdkVersion="30" />
+    
+    <!-- Modern Bluetooth permissions for Android 31+ (Frame SDK 2025) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    
+    <!-- Location permissions (required for Bluetooth scanning) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- Nearby devices permission for Android 33+ (Frame SDK 2025 compatibility) -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" 
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - FOREGROUND SERVICE PERMISSIONS -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Bluetooth (Frame) -->
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-
-    <!-- Audio capture for Gemini -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - AUDIO & CAMERA PERMISSIONS -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - HARDWARE FEATURES -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
+    <uses-feature 
+        android:name="android.hardware.bluetooth_le" 
+        android:required="true" />
+    <uses-feature 
+        android:name="android.hardware.bluetooth" 
+        android:required="true" />
+    <uses-feature 
+        android:name="android.hardware.microphone" 
+        android:required="true" />
+    <uses-feature 
+        android:name="android.hardware.camera" 
+        android:required="false" />
+    <uses-feature 
+        android:name="android.hardware.camera.autofocus" 
+        android:required="false" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - APPLICATION CONFIGURATION -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
 
     <application
         android:label="Frame Realtime Gemini VoiceVision"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:requestLegacyExternalStorage="false"
+        android:usesCleartextTraffic="false"
+        android:largeHeap="true">
 
-        <!-- Flutter v2 embedding metadata -->
+        <!-- Flutter embedding metadata -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
+        <!-- Frame SDK 2025 metadata -->
+        <meta-data
+            android:name="frame.sdk.version"
+            android:value="2025" />
 
-        <!-- Main Activity -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- MAIN ACTIVITY (Frame SDK 2025 optimized) -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        
         <activity
             android:name=".MainActivity"
             android:theme="@style/LaunchTheme"
             android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
+            android:hardwareAccelerated="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+            
+            <!-- Intent filters for launching -->
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            
+            <!-- Frame SDK 2025 - Deep linking support -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="frame" />
+            </intent-filter>
+            
+            <!-- Window theme metadata -->
+            <meta-data 
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
         </activity>
 
-        <!-- Foreground-task service (flutter_foreground_task 8.x) -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- FRAME SDK 2025 - FOREGROUND SERVICES -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        
+        <!-- Enhanced foreground service for Frame connection -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
-            android:foregroundServiceType="dataSync|remoteMessaging" />
+            android:foregroundServiceType="dataSync|remoteMessaging|microphone"
+            android:stopWithTask="false"
+            android:enabled="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+            
+        <!-- Foreground service receiver -->
+        <receiver 
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundServiceReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- FRAME SDK 2025 - BACKGROUND OPTIMIZATION -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        
+        <!-- Boot receiver for Frame app persistence -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+        
     </application>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - ANDROID 30+ PACKAGE VISIBILITY -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
+    <queries>
+        <!-- Bluetooth adapter queries -->
+        <intent>
+            <action android:name="android.intent.action.BLUETOOTH_ADAPTER_STATE_CHANGED" />
+        </intent>
+        <intent>
+            <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />
+        </intent>
+        
+        <!-- Frame SDK 2025 - Bluetooth device queries -->
+        <intent>
+            <action android:name="android.bluetooth.device.action.FOUND" />
+        </intent>
+        <intent>
+            <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
+        </intent>
+        
+        <!-- Audio and media queries -->
+        <intent>
+            <action android:name="android.media.action.SCO_AUDIO_STATE_UPDATED" />
+        </intent>
+        
+        <!-- System settings queries -->
+        <intent>
+            <action android:name="android.settings.BLUETOOTH_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
+        </intent>
+    </queries>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <!-- FRAME SDK 2025 - NETWORK SECURITY CONFIG -->
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    
+    <!-- Allow HTTPS connections to Gemini API -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
 </manifest>
