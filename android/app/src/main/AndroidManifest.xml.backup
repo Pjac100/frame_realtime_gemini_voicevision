@@ -17,25 +17,7 @@
 
     <application
         android:label="Frame Realtime Gemini VoiceVision"
-        android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-
-        <!-- Flutter v2 embedding metadata -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
-
-        <!-- Main Activity -->
-        <activity
-            android:name=".MainActivity"
-            android:theme="@style/LaunchTheme"
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
-        </activity>
 
         <!-- Foreground-task service (flutter_foreground_task 8.x) -->
         <service
