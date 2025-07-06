@@ -16,7 +16,7 @@ def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "
 android {
     namespace "com.example.frame_realtime_gemini_voicevision"
 
-    compileSdkVersion 34
+    compileSdkVersion 35
 
     defaultConfig {
         applicationId "com.example.frame_realtime_gemini_voicevision"
