@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
 
 void main() {
   runApp(const MyApp());
@@ -181,8 +180,6 @@ class MainAppState extends State<MainApp> {
       });
       
       _logEvent('✅ Connected to ${device.platformName}');
-      
-      // TODO: Set up Frame SDK communication here
       _logEvent('🎉 Ready for AI sessions!');
       
     } catch (e) {
@@ -225,10 +222,6 @@ class MainAppState extends State<MainApp> {
 
     _logEvent('🎤 AI session started');
     _logEvent('💡 Feature coming soon: Voice + Vision processing');
-    
-    // TODO: Implement actual Frame communication
-    // TODO: Implement Gemini integration
-    // TODO: Implement audio/photo streaming
   }
 
   void _stopSession() {
@@ -261,14 +254,8 @@ class MainAppState extends State<MainApp> {
     });
   }
 
-  Future<void> _shareEventLog() async {
-    final logText = _eventLog.join('\n');
-    await Share.share(logText);
-  }
-
-  Future<void> _testVectorDatabase() async {
+  void _testVectorDatabase() {
     _logEvent('🔍 Vector database test - Feature coming soon');
-    // TODO: Implement when VectorDbService is ready
   }
 
   @override
@@ -277,14 +264,6 @@ class MainAppState extends State<MainApp> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
-        actions: [
-          if (_eventLog.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.share),
-              onPressed: _shareEventLog,
-              tooltip: 'Share Event Log',
-            ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
