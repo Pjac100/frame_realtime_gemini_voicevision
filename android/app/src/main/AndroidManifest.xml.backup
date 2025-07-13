@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.frame_realtime_gemini_voicevision">
+
+    <!-- Foreground-service & notification permissions -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Bluetooth (Frame) -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Audio capture for Gemini -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:label="Frame Realtime Gemini VoiceVision"
+        android:icon="@mipmap/ic_launcher">
+
+        <!-- Foreground-task service (flutter_foreground_task 8.x) -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|remoteMessaging" />
+    </application>
+</manifest>

@@ -43,7 +43,7 @@ final _entities = <obx_int.ModelEntity>[
         type: 28,
         flags: 8,
         indexId: const obx_int.IdUid(1, 9089198750530166764),
-        hnswParams: obx_int.ModelHnswParams(dimensions: 384),
+        hnswParams: obx_int.ModelHnswParams(dimensions: 384, distanceType: 2),
       ),
     ],
     relations: <obx_int.ModelRelation>[],
