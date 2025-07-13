@@ -5,7 +5,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-// import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,7 +48,7 @@ class MainApp extends StatefulWidget {
 class MainAppState extends State<MainApp> {
   // Connection state
   bool _isScanning = false;
-  List<fbp.BluetoothDevice> _availableDevices = [];
+  final List<fbp.BluetoothDevice> _availableDevices = [];
   fbp.BluetoothDevice? _connectedDevice;
   
   // AI Configuration
@@ -264,10 +263,7 @@ class MainAppState extends State<MainApp> {
 
   Future<void> _shareEventLog() async {
     final logText = _eventLog.join('\n');
-    await Share.share(
-      logText,
-      subject: 'Frame App Event Log - ${DateTime.now().toString().substring(0, 19)}',
-    );
+    await Share.share(logText);
   }
 
   Future<void> _testVectorDatabase() async {
