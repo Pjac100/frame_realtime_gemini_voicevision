@@ -572,7 +572,7 @@ class VectorDbService {
     try {
       _emit('🧪 Testing MobileBERT model...');
       
-      final testText = 'This is a test sentence for MobileBERT embedding generation.';
+      const testText = 'This is a test sentence for MobileBERT embedding generation.';
       final embedding = await generateEmbedding(testText);
       
       final embeddingLength = embedding.length;

@@ -315,7 +315,7 @@ class MainAppState extends State<MainApp> {
     if (!_isSessionActive || _chatSession == null) return;
     
     try {
-      final userQuery = 'Hello! I am testing the Gemini integration with Frame smart glasses and MobileBERT embeddings.';
+      const userQuery = 'Hello! I am testing the Gemini integration with Frame smart glasses and MobileBERT embeddings.';
       
       // Get conversation context from vector database
       String context = '';
@@ -435,7 +435,7 @@ Please respond naturally, taking into account any relevant conversation history 
       for (final result in results) {
         final score = ((result['score'] as double) * 100).round();
         final content = result['document']?.toString() ?? '';
-        _logEvent('📄 Match ${score}%: ${content.substring(0, content.length.clamp(0, 50))}...');
+        _logEvent('📄 Match $score%: ${content.substring(0, content.length.clamp(0, 50))}...');
       }
       
     } catch (e) {
