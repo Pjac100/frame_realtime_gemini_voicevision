@@ -79,7 +79,7 @@ class MainAppState extends State<MainApp> {
   fbp.BluetoothDevice? _connectedDevice;
   
   // AI Configuration
-      const geminiApiKey = '';
+      String _geminiApiKey = '';
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
   GenerativeModel? _model;
   ChatSession? _chatSession;
