@@ -79,7 +79,7 @@ class MainAppState extends State<MainApp> {
   fbp.BluetoothDevice? _connectedDevice;
   
   // AI Configuration
-  String _geminiApiKey = '';
+      const geminiApiKey = '';
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
   GenerativeModel? _model;
   ChatSession? _chatSession;
@@ -92,7 +92,7 @@ class MainAppState extends State<MainApp> {
   final List<String> _eventLog = [];
   final ScrollController _scrollController = ScrollController();
   
-  // Vector database
+  // Vector database with MobileBERT
   VectorDbService? _vectorDb;
 
   @override
@@ -101,23 +101,24 @@ class MainAppState extends State<MainApp> {
     _initializeServices();
     _loadGeminiApiKey();
     _requestPermissions();
-    _logEvent('🚀 App initialized');
+    _logEvent('🚀 App initialized with MobileBERT embeddings');
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _connectedDevice?.disconnect();
+    _vectorDb?.dispose();
     super.dispose();
   }
 
   Future<void> _initializeServices() async {
     try {
-      // Initialize vector database
+      // Initialize vector database with MobileBERT
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
-      _logEvent('🔧 Services initialized');
+      _logEvent('🔧 Services initialized with MobileBERT');
     } catch (e) {
       _logEvent('❌ Service initialization error: $e');
       // Continue anyway - some services might still work
@@ -168,12 +169,12 @@ class MainAppState extends State<MainApp> {
           'You are a helpful AI assistant integrated with Frame smart glasses. '
           'You can see what the user sees through their camera and hear their voice. '
           'Provide natural, conversational responses. Keep responses concise but helpful. '
-          'You have access to conversation history through vector search for context.'
+          'You have access to conversation history through local vector search for context.'
         ),
       );
 
       _chatSession = _model!.startChat();
-      _logEvent('🤖 Gemini models initialized');
+      _logEvent('🤖 Gemini conversation model initialized');
     } catch (e) {
       _logEvent('❌ Gemini initialization failed: $e');
     }
@@ -294,10 +295,10 @@ class MainAppState extends State<MainApp> {
       _isSessionActive = true;
     });
 
-    _logEvent('🎤 AI session started');
+    _logEvent('🎤 AI session started with MobileBERT embeddings');
     
-    // Simulate AI conversation for testing
-    _simulateAiInteraction();
+    // Simulate AI conversation with vector context
+    _simulateContextAwareConversation();
   }
 
   void _stopSession() {
@@ -310,52 +311,77 @@ class MainAppState extends State<MainApp> {
     _logEvent('⏹️ AI session stopped');
   }
 
-  Future<void> _simulateAiInteraction() async {
+  Future<void> _simulateContextAwareConversation() async {
     if (!_isSessionActive || _chatSession == null) return;
     
     try {
-      // Simulate a conversation with Gemini
+      final userQuery = 'Hello! I am testing the Gemini integration with Frame smart glasses and MobileBERT embeddings.';
+      
+      // Get conversation context from vector database
+      String context = '';
+      if (_vectorDb != null) {
+        context = await _vectorDb!.getConversationContext(
+          currentQuery: userQuery,
+          maxResults: 3,
+          threshold: 0.3,
+        );
+      }
+      
+      // Create enhanced prompt with context
+      final enhancedPrompt = '''
+$context
+
+Current user message: $userQuery
+
+Please respond naturally, taking into account any relevant conversation history above.
+''';
+      
       final response = await _chatSession!.sendMessage(
-        Content.text('Hello! I am testing the Gemini integration with Frame smart glasses. Please respond with a brief, friendly message.')
+        Content.text(enhancedPrompt)
       );
       
       final responseText = response.text;
       if (responseText != null && responseText.isNotEmpty) {
         _logEvent('🤖 Gemini: $responseText');
         
-        // Store conversation in vector database
+        // Store both user query and response in vector database
         if (_vectorDb != null) {
           try {
-            await _vectorDb!.addEmbedding(
-              id: 'conversation_${DateTime.now().millisecondsSinceEpoch}',
-              embedding: await _generateEmbedding(responseText),
+            // Store user query
+            await _vectorDb!.addTextWithEmbedding(
+              content: userQuery,
               metadata: {
-                'content': responseText,
-                'type': 'conversation',
+                'type': 'user_message',
                 'timestamp': DateTime.now().toIso8601String(),
-                'source': 'gemini_response',
+                'source': 'user_input',
+                'session_id': 'test_session',
               },
             );
+            
+            // Store assistant response
+            await _vectorDb!.addTextWithEmbedding(
+              content: responseText,
+              metadata: {
+                'type': 'assistant_response',
+                'timestamp': DateTime.now().toIso8601String(),
+                'source': 'gemini_response',
+                'session_id': 'test_session',
+              },
+            );
+            
+            _logEvent('📚 Conversation stored in vector database');
           } catch (e) {
-            _logEvent('⚠️ Failed to store conversation in vector DB: $e');
+            _logEvent('⚠️ Failed to store conversation: $e');
           }
         }
-        
-        _logEvent('📱 Response stored in conversation memory');
       }
     } catch (e) {
       _logEvent('❌ Gemini conversation error: $e');
     }
   }
 
-  Future<List<double>> _generateEmbedding(String text) async {
-    // Placeholder for actual embedding generation
-    // In a real implementation, you would use a proper embedding model
-    return List.generate(384, (index) => (text.hashCode + index) / 1000000.0);
-  }
-
   void _logEvent(String event) {
-    final timestamp = DateTime.now().toString().substring(11, 19);
+          final timestamp = DateTime.now().toString().substring(11, 19);
     final logEntry = '[$timestamp] $event';
     
     setState(() {
@@ -374,78 +400,92 @@ class MainAppState extends State<MainApp> {
     });
   }
 
-  Future<void> _testVectorDatabase() async {
+  Future<void> _testMobileBertModel() async {
+    if (_vectorDb == null) {
+      _logEvent('❌ MobileBERT vector database not initialized');
+      return;
+    }
+    
+    try {
+      _logEvent('🧪 Testing MobileBERT model...');
+      
+      // Test the model directly
+      await _vectorDb!.testModel();
+      
+      // Test embedding generation and storage
+      await _vectorDb!.addTextWithEmbedding(
+        content: 'This is a test of MobileBERT embedding generation on device',
+        metadata: {
+          'type': 'test',
+          'timestamp': DateTime.now().toIso8601String(),
+          'source': 'model_test',
+        },
+      );
+      
+      // Test similarity search
+      final results = await _vectorDb!.queryText(
+        queryText: 'MobileBERT embedding test',
+        topK: 3,
+        threshold: 0.2,
+      );
+      
+      _logEvent('✅ MobileBERT test complete: ${results.length} similar results found');
+      
+      // Display results
+      for (final result in results) {
+        final score = ((result['score'] as double) * 100).round();
+        final content = result['document']?.toString() ?? '';
+        _logEvent('📄 Match ${score}%: ${content.substring(0, content.length.clamp(0, 50))}...');
+      }
+      
+    } catch (e) {
+      _logEvent('❌ MobileBERT test failed: $e');
+    }
+  }
+
+  Future<void> _addSampleData() async {
     if (_vectorDb == null) {
       _logEvent('❌ Vector database not initialized');
       return;
     }
     
     try {
-      _logEvent('🔍 Testing vector database...');
+      _logEvent('📝 Adding sample data with MobileBERT embeddings...');
+      await _vectorDb!.addSampleData();
       
-      // Test embedding storage
-      await _vectorDb!.addEmbedding(
-        id: 'test_${DateTime.now().millisecondsSinceEpoch}',
-        embedding: List.generate(384, (i) => i / 100.0),
-        metadata: {
-          'content': 'Test vector database functionality',
-          'type': 'test',
-          'timestamp': DateTime.now().toIso8601String(),
-          'source': 'test_function',
-        },
-      );
-      
-      // Test similarity search
-      final results = await _vectorDb!.querySimilarEmbeddings(
-        queryEmbedding: List.generate(384, (i) => i / 100.0),
-        topK: 5,
-      );
-      
-      // Get database stats
+      // Get updated stats
       final stats = await _vectorDb!.getStats();
-      _logEvent('📊 DB Stats: ${stats['totalDocuments']} docs, types: ${stats['typeDistribution']}');
+      _logEvent('📊 Database updated: ${stats['totalDocuments']} docs, model: ${stats['embeddingModel']}');
       
-      _logEvent('✅ Vector DB test complete: ${results.length} results');
     } catch (e) {
-      _logEvent('❌ Vector DB test failed: $e');
+      _logEvent('❌ Failed to add sample data: $e');
     }
   }
 
-  Future<void> _testGeminiConversation() async {
-    if (_chatSession == null) {
-      _logEvent('❌ Gemini not initialized');
+  Future<void> _getVectorDatabaseStats() async {
+    if (_vectorDb == null) {
+      _logEvent('❌ Vector database not initialized');
       return;
     }
     
     try {
-      _logEvent('🤖 Testing Gemini conversation...');
+      final stats = await _vectorDb!.getStats();
       
-      final response = await _chatSession!.sendMessage(
-        Content.text('This is a test message. Please respond with something creative and brief.')
-      );
+      _logEvent('📊 Vector DB Stats:');
+      _logEvent('  • Total documents: ${stats['totalDocuments']}');
+      _logEvent('  • With embeddings: ${stats['documentsWithEmbeddings']}');
+      _logEvent('  • Embedding model: ${stats['embeddingModel']}');
+      _logEvent('  • Avg dimensions: ${stats['averageEmbeddingDimensions']}');
+      _logEvent('  • Vocabulary size: ${stats['vocabularySize']}');
+      _logEvent('  • Max sequence length: ${stats['maxSequenceLength']}');
       
-      final responseText = response.text;
-      if (responseText != null && responseText.isNotEmpty) {
-        _logEvent('🤖 Gemini test response: $responseText');
-        
-        // Store in vector database
-        if (_vectorDb != null) {
-          await _vectorDb!.addEmbedding(
-            id: 'test_conversation_${DateTime.now().millisecondsSinceEpoch}',
-            embedding: await _generateEmbedding(responseText),
-            metadata: {
-              'content': responseText,
-              'type': 'test_conversation',
-              'timestamp': DateTime.now().toIso8601String(),
-              'source': 'gemini_test',
-            },
-          );
-        }
-        
-        _logEvent('✅ Gemini conversation test complete');
+      if (stats['typeDistribution'] != null) {
+        final types = stats['typeDistribution'] as Map<String, int>;
+        _logEvent('  • Document types: ${types.entries.map((e) => '${e.key}:${e.value}').join(', ')}');
       }
+      
     } catch (e) {
-      _logEvent('❌ Gemini conversation test failed: $e');
+      _logEvent('❌ Failed to get stats: $e');
     }
   }
 
@@ -702,7 +742,7 @@ class MainAppState extends State<MainApp> {
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(
-                maxHeight: 250, // Limit photo height to prevent overflow
+                maxHeight: 250,
                 minHeight: 150,
               ),
               child: Container(
@@ -716,7 +756,7 @@ class MainAppState extends State<MainApp> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.memory(
                           _lastPhoto!,
-                          fit: BoxFit.contain, // Changed from cover to contain
+                          fit: BoxFit.contain,
                           width: double.infinity,
                         ),
                       )
@@ -775,17 +815,40 @@ class MainAppState extends State<MainApp> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _testVectorDatabase,
-                    icon: const Icon(Icons.storage),
-                    label: const Text('Test Vector DB'),
+                    onPressed: _testMobileBertModel,
+                    icon: const Icon(Icons.psychology),
+                    label: const Text('Test MobileBERT'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _geminiApiKey.isNotEmpty ? _testGeminiConversation : null,
-                    icon: const Icon(Icons.chat),
-                    label: const Text('Test Gemini'),
+                    onPressed: _addSampleData,
+                    icon: const Icon(Icons.data_array),
+                    label: const Text('Add Sample Data'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _getVectorDatabaseStats,
+                    icon: const Icon(Icons.analytics),
+                    label: const Text('DB Stats'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _vectorDb != null ? () => _vectorDb!.clearAll() : null,
+                    icon: const Icon(Icons.clear_all),
+                    label: const Text('Clear DB'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                    ),
                   ),
                 ),
               ],
@@ -794,7 +857,7 @@ class MainAppState extends State<MainApp> {
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
                 child: Text(
-                  '🎤 AI session active - testing Gemini integration',
+                  '🎤 AI session active with MobileBERT context',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
                     color: Colors.blue,

@@ -52,14 +52,17 @@ dependencies:
   flutter_foreground_task: ^9.1.0
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # ML KIT (Keep your versions)
+  # ML KIT & TENSORFLOW LITE (UPDATED FOR MOBILEBERT)
   # ═══════════════════════════════════════════════════════════════════════════
   
   google_mlkit_text_recognition: ^0.15.0
   google_mlkit_commons: ^0.11.0
+  
+  # TensorFlow Lite for MobileBERT embeddings
+  tflite_flutter: ^0.10.4
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # GEMINI AI (MISSING - CRITICAL FIX)
+  # GEMINI AI (For conversation, not embeddings)
   # ═══════════════════════════════════════════════════════════════════════════
   
   google_generative_ai: ^0.4.3
@@ -107,6 +110,9 @@ dependency_overrides:
   
   # ═══ GEMINI AI FIX ═══
   google_generative_ai: 0.4.3         # Add missing Gemini dependency
+  
+  # ═══ TENSORFLOW LITE OVERRIDES ═══
+  tflite_flutter: 0.10.4              # Ensure compatible TensorFlow Lite version
 
 flutter:
   uses-material-design: true
@@ -120,3 +126,7 @@ flutter:
     
     # Your existing custom Frame app
     - assets/frame_app.min.lua
+    
+    # ═══ MOBILEBERT MODEL & VOCABULARY ═══
+    - assets/mobilebert_embedding.tflite
+    - assets/vocab.txt
