@@ -9,10 +9,8 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:path_provider/path_provider.dart';
 
 // ObjectBox imports
-import 'package:objectbox/objectbox.dart';
-import 'model/document_entity.dart';
-import 'services/vector_db_service.dart';
-import 'objectbox.g.dart';
+import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
+import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
 // Global ObjectBox store instance
 late Store store;

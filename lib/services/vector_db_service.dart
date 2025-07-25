@@ -1,18 +1,17 @@
+import 'dart:math' as math;
 import 'package:objectbox/objectbox.dart';
-import '../model/document_entity.dart';  // Correct path
-import '../objectbox.g.dart';
+import 'package:frame_realtime_gemini_voicevision/model/document_entity.dart';
+import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
 class VectorDbService {
   late final Box<Document> _box;
   late final Store _store;
 
-  /// Optional callback to echo diagnostic events to the UI.
   VectorDbService([void Function(String msg)? uiLogger])
       : _emit = uiLogger ?? ((_) {});
 
   final void Function(String) _emit;
 
-  // ────────────────── lifecycle ──────────────────────────────────────────
   Future<void> initialize(Store store) async {
     try {
       _store = store;
@@ -28,9 +27,6 @@ class VectorDbService {
     // ObjectBox store cleanup handled elsewhere
   }
 
-  // ────────────────── public api ─────────────────────────────────────────
-  
-  /// Add an embedding to the vector database
   Future<void> addEmbedding({
     required String id,
     required List<double> embedding,
@@ -41,7 +37,6 @@ class VectorDbService {
                       metadata['source']?.toString() ?? 
                       id;
       
-      // Encode metadata in textContent (simple approach)
       final metadataStr = metadata.entries
           .map((e) => '${e.key}=${e.value}')
           .join('|');
@@ -63,24 +58,22 @@ class VectorDbService {
     }
   }
 
-  /// Query for similar embeddings using vector search
   Future<List<Map<String, Object?>>> querySimilarEmbeddings({
     required List<double> queryEmbedding,
     required int topK,
   }) async {
     try {
-      final q = _box
-          .query(Document_.embedding.nearestNeighborsF32(queryEmbedding, topK))
-          .build();
-      
-      final res = q.findWithScores();
-      q.close();
+      final query = _box.query().build();
+      final docs = query.find();
+      query.close();
 
-      _emit('🔍 Found ${res.length} similar docs');
+      _emit('🔍 Found ${docs.length} documents, calculating similarity');
       
-      return res.map((r) {
-        final parts = r.object.textContent.split('||META:');
-        final content = parts.isNotEmpty ? parts[0] : r.object.textContent;
+      final results = <Map<String, Object?>>[];
+      
+      for (final doc in docs) {
+        final parts = doc.textContent.split('||META:');
+        final content = parts.isNotEmpty ? parts[0] : doc.textContent;
         final metadataStr = parts.length > 1 ? parts[1] : '';
         
         final metadata = <String, String>{};
@@ -93,20 +86,45 @@ class VectorDbService {
           }
         }
         
-        return {
-          'id': r.object.id,
+        double score = 0.5;
+        if (doc.embedding != null && doc.embedding!.isNotEmpty) {
+          score = _cosineSimilarity(queryEmbedding, doc.embedding!);
+        }
+        
+        results.add({
+          'id': doc.id,
           'document': content,
-          'score': r.score,
+          'score': score,
           'metadata': metadata,
-        };
-      }).toList();
+        });
+      }
+      
+      results.sort((a, b) => (b['score'] as double).compareTo(a['score'] as double));
+      return results.take(topK).toList();
     } catch (e) {
       _emit('❌ Vector search failed: $e');
       return [];
     }
   }
 
-  /// Get all documents (for debugging)
+  double _cosineSimilarity(List<double> a, List<double> b) {
+    if (a.length != b.length) return 0.0;
+    
+    double dotProduct = 0.0;
+    double normA = 0.0;
+    double normB = 0.0;
+    
+    for (int i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    
+    if (normA == 0.0 || normB == 0.0) return 0.0;
+    
+    return dotProduct / (math.sqrt(normA) * math.sqrt(normB));
+  }
+
   Future<List<Document>> getAllDocuments() async {
     try {
       final docs = _box.getAll();
@@ -118,7 +136,6 @@ class VectorDbService {
     }
   }
 
-  /// Clear all documents
   Future<void> clearAll() async {
     try {
       final count = _box.count();
@@ -130,7 +147,6 @@ class VectorDbService {
     }
   }
 
-  /// Get document count
   int getDocumentCount() {
     try {
       return _box.count();
@@ -139,7 +155,6 @@ class VectorDbService {
     }
   }
 
-  /// Get database statistics
   Future<Map<String, dynamic>> getStats() async {
     try {
       final totalDocs = getDocumentCount();
@@ -165,7 +180,6 @@ class VectorDbService {
         }
       }
       
-      // Fix the averaging calculation
       double averageEmbeddingDimensions = 0;
       final docsWithEmbeddings = allDocs.where((d) => d.embedding != null).toList();
       if (docsWithEmbeddings.isNotEmpty) {

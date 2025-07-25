@@ -41,7 +41,9 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(3, 1648759725581703846),
         name: 'embedding',
         type: 28,
-        flags: 0,
+        flags: 8,
+        indexId: const obx_int.IdUid(2, 4776315006040291726),
+        hnswParams: obx_int.ModelHnswParams(dimensions: 384),
       ),
       obx_int.ModelProperty(
         id: const obx_int.IdUid(4, 5382117186259043279),
@@ -100,7 +102,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
     entities: _entities,
     lastEntityId: const obx_int.IdUid(1, 969174070785586791),
-    lastIndexId: const obx_int.IdUid(1, 9089198750530166764),
+    lastIndexId: const obx_int.IdUid(2, 4776315006040291726),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -194,7 +196,7 @@ class Document_ {
   );
 
   /// See [Document.embedding].
-  static final embedding = obx.QueryDoubleVectorProperty<Document>(
+  static final embedding = obx.QueryHnswProperty<Document>(
     _entities[0].properties[2],
   );
 

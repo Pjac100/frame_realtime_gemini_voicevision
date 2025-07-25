@@ -8,6 +8,7 @@ class Document {
   String textContent;
   
   @Property(type: PropertyType.floatVector)
+  @HnswIndex(dimensions: 384)
   List<double>? embedding;
   
   @Property(type: PropertyType.date)
