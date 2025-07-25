@@ -1,5 +1,5 @@
 import 'package:objectbox/objectbox.dart';
-import '../document_entity.dart';  // Document is in lib/ not lib/model/
+import '../model/document_entity.dart';  // Correct path
 import '../objectbox.g.dart';
 
 class VectorDbService {
@@ -51,6 +51,8 @@ class VectorDbService {
       final doc = Document(
         textContent: fullContent,
         embedding: embedding,
+        createdAt: DateTime.now(),
+        metadata: metadataStr,
       );
       
       final docId = _box.put(doc);
@@ -163,15 +165,20 @@ class VectorDbService {
         }
       }
       
+      // Fix the averaging calculation
+      double averageEmbeddingDimensions = 0;
+      final docsWithEmbeddings = allDocs.where((d) => d.embedding != null).toList();
+      if (docsWithEmbeddings.isNotEmpty) {
+        final totalDimensions = docsWithEmbeddings
+            .map((d) => d.embedding!.length)
+            .fold<int>(0, (a, b) => a + b);
+        averageEmbeddingDimensions = totalDimensions / docsWithEmbeddings.length;
+      }
+      
       return {
         'totalDocuments': totalDocs,
         'typeDistribution': typeGroups,
-        'averageEmbeddingDimensions': allDocs.isNotEmpty
-            ? allDocs
-                .where((d) => d.embedding != null)
-                .map((d) => d.embedding!.length)
-                .fold(0, (a, b) => a + b) / allDocs.length
-            : 0,
+        'averageEmbeddingDimensions': averageEmbeddingDimensions,
       };
     } catch (e) {
       return {'error': e.toString()};

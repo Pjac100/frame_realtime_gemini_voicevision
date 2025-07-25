@@ -59,6 +59,12 @@ dependencies:
   google_mlkit_commons: ^0.11.0
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # GEMINI AI (MISSING - CRITICAL FIX)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  google_generative_ai: ^0.4.3
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # OBJECTBOX (Keep stable version)
   # ═══════════════════════════════════════════════════════════════════════════
   
@@ -98,6 +104,9 @@ dependency_overrides:
   
   # ═══ ARCHIVE CONFLICT RESOLUTION ═══
   archive: 4.0.2                      # Resolve the conflict by using the newer version
+  
+  # ═══ GEMINI AI FIX ═══
+  google_generative_ai: 0.4.3         # Add missing Gemini dependency
 
 flutter:
   uses-material-design: true
