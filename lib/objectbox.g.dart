@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 969174070785586791),
     name: 'Document',
-    lastPropertyId: const obx_int.IdUid(3, 1648759725581703846),
+    lastPropertyId: const obx_int.IdUid(5, 4497201743384106223),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -42,8 +42,20 @@ final _entities = <obx_int.ModelEntity>[
         name: 'embedding',
         type: 28,
         flags: 8,
-        indexId: const obx_int.IdUid(1, 9089198750530166764),
+        indexId: const obx_int.IdUid(2, 4776315006040291726),
         hnswParams: obx_int.ModelHnswParams(dimensions: 384),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 5382117186259043279),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 4497201743384106223),
+        name: 'metadata',
+        type: 9,
+        flags: 0,
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -90,11 +102,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
     entities: _entities,
     lastEntityId: const obx_int.IdUid(1, 969174070785586791),
-    lastIndexId: const obx_int.IdUid(1, 9089198750530166764),
+    lastIndexId: const obx_int.IdUid(2, 4776315006040291726),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
-    retiredIndexUids: const [],
+    retiredIndexUids: const [9089198750530166764],
     retiredPropertyUids: const [],
     retiredRelationUids: const [],
     modelVersion: 5,
@@ -116,16 +128,26 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final embeddingOffset = object.embedding == null
             ? null
             : fbb.writeListFloat32(object.embedding!);
-        fbb.startTable(4);
+        final metadataOffset = object.metadata == null
+            ? null
+            : fbb.writeString(object.metadata!);
+        fbb.startTable(6);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, textContentOffset);
         fbb.addOffset(2, embeddingOffset);
+        fbb.addInt64(3, object.createdAt?.millisecondsSinceEpoch);
+        fbb.addOffset(4, metadataOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
       objectFromFB: (obx.Store store, ByteData fbData) {
         final buffer = fb.BufferContext(fbData);
         final rootOffset = buffer.derefObject(0);
+        final createdAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          10,
+        );
         final idParam = const fb.Int64Reader().vTableGet(
           buffer,
           rootOffset,
@@ -139,10 +161,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fb.Float32Reader(),
           lazy: false,
         ).vTableGetNullable(buffer, rootOffset, 8);
+        final createdAtParam = createdAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(createdAtValue);
+        final metadataParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 12);
         final object = Document(
           id: idParam,
           textContent: textContentParam,
           embedding: embeddingParam,
+          createdAt: createdAtParam,
+          metadata: metadataParam,
         );
 
         return object;
@@ -168,5 +198,15 @@ class Document_ {
   /// See [Document.embedding].
   static final embedding = obx.QueryHnswProperty<Document>(
     _entities[0].properties[2],
+  );
+
+  /// See [Document.createdAt].
+  static final createdAt = obx.QueryDateProperty<Document>(
+    _entities[0].properties[3],
+  );
+
+  /// See [Document.metadata].
+  static final metadata = obx.QueryStringProperty<Document>(
+    _entities[0].properties[4],
   );
 }
