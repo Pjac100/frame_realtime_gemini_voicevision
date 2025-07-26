@@ -59,7 +59,7 @@ dependencies:
   google_mlkit_commons: ^0.11.0
   
   # TensorFlow Lite for MobileBERT embeddings
-  tflite_flutter: ^0.10.4
+  tflite_flutter: ^0.11.0
 
   # ═══════════════════════════════════════════════════════════════════════════
   # GEMINI AI (For conversation, not embeddings)
@@ -112,7 +112,7 @@ dependency_overrides:
   google_generative_ai: 0.4.3         # Add missing Gemini dependency
   
   # ═══ TENSORFLOW LITE OVERRIDES ═══
-  tflite_flutter: 0.10.4              # Ensure compatible TensorFlow Lite version
+  tflite_flutter: 0.11.0              # Ensure compatible TensorFlow Lite version
 
 flutter:
   uses-material-design: true
