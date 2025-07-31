@@ -3,11 +3,10 @@ name: Build Cognitive Assistant APK
 on:
   push:
     branches:
-      - refactor-v2  # This now watches our new branch
+      - refactor-v2        # watches your working branch
       - main
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -16,35 +15,61 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository code
+      # ─────────── Checkout ──────────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ─────────── JDK 17 (for Gradle 8+) ────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
-      - name: Set up Flutter
+      # ─────────── Flutter SDK 3.32.5 (Dart 3.8.1) ───────────────────────
+      - name: Set up Flutter 3.32.5
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
-          channel: 'stable'
-          cache: true
+          flutter-version: 3.32.5       # exact tag
+          channel: stable               # ignored because tag given
+          cache: true                   # cache SDK + pub-cache
 
-      - name: Install Flutter dependencies
+      - name: Show tool versions
+        run: flutter --version
+
+      # ─────────── Dependencies & code-gen ───────────────────────────────
+      - name: flutter pub get
         run: flutter pub get
 
-      - name: Run Build Runner
+      - name: Run build_runner
         run: dart run build_runner build --delete-conflicting-outputs
 
-      - name: Clean Flutter build cache
+      # ─────────── Lint gate (fails build on new errors) ─────────────────
+      - name: Static analysis
+        run: flutter analyze --no-pub
+
+      # ─────────── Build APK with verbose log capture ────────────────────
+      - name: flutter clean
         run: flutter clean
 
-      - name: Build Debug APK
-        run: flutter build apk --debug
+      - name: Build Debug APK (capture log)
+        id: build_apk
+        run: |
+          # Capture full verbose output for troubleshooting
+          set -o pipefail
+          flutter build apk --debug -v 2>&1 | tee flutter-build.log
 
-      - name: Upload Demo APK Artifact
+      # ─────────── Upload build log always (success or fail) ─────────────
+      - name: Upload flutter-build.log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-build-log
+          path: flutter-build.log
+
+      # ─────────── Upload APK only on success ────────────────────────────
+      - name: Upload Debug APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: cognitive-assistant-debug.apk
