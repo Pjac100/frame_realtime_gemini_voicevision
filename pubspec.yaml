@@ -124,8 +124,6 @@ flutter:
     - packages/frame_msg/lua/code.min.lua
     - packages/frame_msg/lua/plain_text.min.lua
     
-    # Your existing custom Frame app
-    - assets/frame_app.min.lua
     
     # ═══ MOBILEBERT MODEL & VOCABULARY ═══
     - assets/mobilebert_embedding.tflite
