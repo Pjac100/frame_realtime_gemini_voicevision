@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
+import 'package:frame_msg/frame_msg.dart' as frame;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 // ObjectBox imports
 import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
-import 'package:frame_realtime_gemini_voicevision/services/frame_audio_service.dart';
+import 'package:frame_realtime_gemini_voicevision/services/frame_audio_streaming_service.dart';
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
 // Global ObjectBox store instance
@@ -74,10 +75,11 @@ class MainApp extends StatefulWidget {
 }
 
 class MainAppState extends State<MainApp> {
-  // Connection state
+  // Frame connection using official SDK
+  frame.FrameClient? _frameClient;
+  bool _isConnected = false;
   bool _isScanning = false;
-  final List<fbp.BluetoothDevice> _availableDevices = [];
-  fbp.BluetoothDevice? _connectedDevice;
+  final List<frame.ScanResult> _scanResults = [];
   
   // AI Configuration
   String _geminiApiKey = '';
@@ -93,6 +95,7 @@ class MainAppState extends State<MainApp> {
   bool _isAudioStreaming = false;
   bool _isVoiceDetected = false;
   int _audioPacketsReceived = 0;
+  int _totalAudioBytes = 0;
   
   // Event logging
   final List<String> _eventLog = [];
@@ -101,10 +104,10 @@ class MainAppState extends State<MainApp> {
   // Vector database with MobileBERT
   VectorDbService? _vectorDb;
   
-  // NEW: Frame audio service
-  FrameAudioService? _frameAudio;
-  VoiceActivityDetector? _vad;
+  // Frame audio streaming service
+  FrameAudioStreamingService? _frameAudioService;
   StreamSubscription<Uint8List>? _audioSubscription;
+  StreamSubscription<String>? _frameLogSubscription;
 
   @override
   void initState() {
@@ -112,15 +115,16 @@ class MainAppState extends State<MainApp> {
     _initializeServices();
     _loadGeminiApiKey();
     _requestPermissions();
-    _logEvent('🚀 App initialized with MobileBERT embeddings + Frame audio');
+    _logEvent('🚀 App initialized with Frame SDK integration');
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     _audioSubscription?.cancel();
-    _frameAudio?.dispose();
-    _connectedDevice?.disconnect();
+    _frameLogSubscription?.cancel();
+    _frameAudioService?.dispose();
+    _frameClient?.disconnect();
     _vectorDb?.dispose();
     super.dispose();
   }
@@ -131,16 +135,18 @@ class MainAppState extends State<MainApp> {
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
-      // Initialize Frame audio service
-      _frameAudio = FrameAudioService(_logEvent);
+      // Initialize Frame client
+      _frameClient = frame.FrameClient();
       
-      // Initialize voice activity detector
-      _vad = VoiceActivityDetector(_logEvent);
+      // Initialize Frame audio streaming service
+      _frameAudioService = FrameAudioStreamingService(_logEvent);
       
-      _logEvent('🔧 Services initialized with MobileBERT + Audio');
+      // Subscribe to Frame audio service logs
+      _frameLogSubscription = _frameAudioService!.logStream.listen(_logEvent);
+      
+      _logEvent('🔧 Services initialized with Frame SDK');
     } catch (e) {
       _logEvent('❌ Service initialization error: $e');
-      // Continue anyway - some services might still work
     }
   }
 
@@ -153,21 +159,12 @@ class MainAppState extends State<MainApp> {
       Permission.microphone,
       Permission.bluetoothAdvertise,
       Permission.location,
-      Permission.audio, // NEW: Audio recording permission
     ];
 
     final statuses = await permissions.request();
     bool allGranted = statuses.values.every((status) => status.isGranted);
     
     _logEvent(allGranted ? '✅ All permissions granted' : '⚠️ Some permissions denied');
-    
-    // Check critical audio permissions
-    if (statuses[Permission.microphone] != PermissionStatus.granted) {
-      _logEvent('⚠️ Microphone permission required for audio features');
-    }
-    if (statuses[Permission.audio] != PermissionStatus.granted) {
-      _logEvent('⚠️ Audio permission required for recording');
-    }
   }
 
   Future<void> _loadGeminiApiKey() async {
@@ -203,7 +200,7 @@ class MainAppState extends State<MainApp> {
       );
 
       _chatSession = _model!.startChat();
-      _logEvent('🤖 Gemini conversation model initialized with audio support');
+      _logEvent('🤖 Gemini conversation model initialized');
     } catch (e) {
       _logEvent('❌ Gemini initialization failed: $e');
     }
@@ -220,48 +217,31 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startScanning() async {
-    if (_isScanning) return;
+    if (_isScanning || _frameClient == null) return;
     
     setState(() {
       _isScanning = true;
-      _availableDevices.clear();
+      _scanResults.clear();
     });
     
     _logEvent('🔍 Scanning for Frame devices...');
     
     try {
-      // Check Bluetooth state
-      if (await fbp.FlutterBluePlus.isSupported == false) {
-        _logEvent('❌ Bluetooth not supported');
-        return;
-      }
-
-      // Wait for Bluetooth to be ready
-      await fbp.FlutterBluePlus.adapterState
-          .where((state) => state == fbp.BluetoothAdapterState.on)
-          .first;
+      // Use Frame SDK scanning
+      final scanStream = _frameClient!.startScan();
       
-      // Start scanning
-      await fbp.FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
-      
-      // Listen for scan results
-      fbp.FlutterBluePlus.scanResults.listen((results) {
-        for (fbp.ScanResult result in results) {
-          final deviceName = result.device.platformName.toLowerCase();
-          if (deviceName.contains('frame') || deviceName.contains('brilliant')) {
-            if (!_availableDevices.any((d) => d.remoteId == result.device.remoteId)) {
-              setState(() {
-                _availableDevices.add(result.device);
-              });
-              _logEvent('📱 Found device: ${result.device.platformName}');
-            }
-          }
+      scanStream.listen((result) {
+        if (!_scanResults.any((r) => r.device.btDevice.remoteId == result.device.btDevice.remoteId)) {
+          setState(() {
+            _scanResults.add(result);
+          });
+          _logEvent('📱 Found Frame: ${result.device.name}');
         }
       });
       
-      // Stop scanning after timeout
+      // Stop scanning after 10 seconds
       await Future.delayed(const Duration(seconds: 10));
-      await fbp.FlutterBluePlus.stopScan();
+      await _frameClient!.stopScan();
       
     } catch (e) {
       _logEvent('❌ Scan error: $e');
@@ -273,44 +253,44 @@ class MainAppState extends State<MainApp> {
     }
   }
 
-  Future<void> _connectToDevice(fbp.BluetoothDevice device) async {
+  Future<void> _connectToFrame(frame.ScanResult scanResult) async {
     try {
-      _logEvent('🔗 Connecting to ${device.platformName}...');
+      _logEvent('🔗 Connecting to ${scanResult.device.name}...');
       
-      await device.connect();
+      // Connect using Frame SDK
+      await _frameClient!.connect(scanResult);
       
       setState(() {
-        _connectedDevice = device;
+        _isConnected = true;
       });
       
-      _logEvent('✅ Connected to ${device.platformName}');
+      _logEvent('✅ Connected to ${scanResult.device.name}');
       
-      // NEW: Initialize Frame audio service after connection
+      // Initialize Frame audio streaming
       await _initializeFrameAudio();
       
     } catch (e) {
       _logEvent('❌ Connection failed: $e');
       setState(() {
-        _connectedDevice = null;
+        _isConnected = false;
       });
     }
   }
 
-  // NEW: Initialize Frame audio service
   Future<void> _initializeFrameAudio() async {
-    if (_connectedDevice == null || _frameAudio == null) return;
+    if (_frameClient == null || _frameAudioService == null || !_isConnected) return;
     
     try {
-      _logEvent('🎤 Initializing Frame audio service...');
+      _logEvent('🎤 Initializing Frame audio streaming...');
       
-      final success = await _frameAudio!.initialize(_connectedDevice!);
+      final success = await _frameAudioService!.initialize(_frameClient!);
       if (success) {
         _logEvent('✅ Frame audio service ready');
-        _logEvent('🎉 Ready for voice conversations!');
         
         // Setup audio stream listener
-        _audioSubscription = _frameAudio!.audioDataStream.listen(_handleAudioData);
+        _audioSubscription = _frameAudioService!.audioStream.listen(_handleAudioData);
         
+        _logEvent('🎉 Ready for voice conversations!');
       } else {
         _logEvent('❌ Frame audio service initialization failed');
       }
@@ -319,42 +299,55 @@ class MainAppState extends State<MainApp> {
     }
   }
 
-  // NEW: Handle incoming audio data
   void _handleAudioData(Uint8List audioData) {
     setState(() {
       _audioPacketsReceived++;
+      _totalAudioBytes += audioData.length;
     });
     
     // Perform voice activity detection
-    if (_vad != null) {
-      final voiceDetected = _vad!.detectVoiceActivity(audioData);
-      if (voiceDetected != _isVoiceDetected) {
-        setState(() {
-          _isVoiceDetected = voiceDetected;
-        });
-        
-        if (voiceDetected) {
-          _logEvent('🗣️ Voice activity started');
-        } else {
-          _logEvent('🤫 Voice activity stopped');
-        }
+    final voiceDetected = _detectVoiceActivity(audioData);
+    if (voiceDetected != _isVoiceDetected) {
+      setState(() {
+        _isVoiceDetected = voiceDetected;
+      });
+      
+      if (voiceDetected) {
+        _logEvent('🗣️ Voice activity detected');
+      } else {
+        _logEvent('🤫 Voice activity stopped');
       }
     }
     
-    // TODO: Process audio for speech-to-text
-    // This is where we'll add speech recognition in the next phase
+    // TODO: Process audio for speech-to-text with Gemini
+  }
+
+  bool _detectVoiceActivity(Uint8List audioData) {
+    // Simple energy-based VAD
+    double energy = 0.0;
+    for (int i = 0; i < audioData.length; i += 2) {
+      if (i + 1 < audioData.length) {
+        final sample = (audioData[i] | (audioData[i + 1] << 8));
+        final normalizedSample = (sample > 32767 ? sample - 65536 : sample) / 32768.0;
+        energy += normalizedSample * normalizedSample;
+      }
+    }
+    energy = energy / (audioData.length / 2);
+    
+    return energy > 0.01; // Simple threshold
   }
 
   Future<void> _disconnect() async {
     try {
-      if (_connectedDevice != null) {
-        _stopSession();
-        await _connectedDevice!.disconnect();
+      if (_frameClient != null && _isConnected) {
+        await _stopSession();
+        await _frameClient!.disconnect();
         
         setState(() {
-          _connectedDevice = null;
+          _isConnected = false;
           _isAudioStreaming = false;
           _audioPacketsReceived = 0;
+          _totalAudioBytes = 0;
         });
         
         _logEvent('🔌 Disconnected from Frame');
@@ -365,7 +358,7 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startSession() async {
-    if (_isSessionActive || _connectedDevice == null || _geminiApiKey.isEmpty) {
+    if (_isSessionActive || !_isConnected || _geminiApiKey.isEmpty) {
       if (_geminiApiKey.isEmpty) {
         _logEvent('⚠️ Please set Gemini API key first');
         return;
@@ -382,34 +375,27 @@ class MainAppState extends State<MainApp> {
     // Start audio streaming
     await _startAudioStreaming();
     
-    // Simulate conversation context retrieval
-    _simulateContextAwareConversation();
+    // Start camera capture
+    await _startCameraCapture();
   }
 
-  // NEW: Start audio streaming
   Future<void> _startAudioStreaming() async {
-    if (_frameAudio == null || _isAudioStreaming) return;
+    if (_frameAudioService == null || _isAudioStreaming || !_isConnected) return;
     
     try {
-      bool success;
-      
-      // Use mock audio in Codespace, real audio on device
-      if (!Platform.isAndroid) {
-        // Codespace development - use mock audio
-        _frameAudio!.startMockAudioStream();
-        success = true;
-        _logEvent('🧪 Started mock audio stream for Codespace testing');
-      } else {
-        // Real device - use Frame hardware
-        success = await _frameAudio!.startAudioStream();
-      }
+      // Use 16kHz/8-bit for better reliability (16 kB/s)
+      final success = await _frameAudioService!.startStreaming(
+        sampleRate: 16000,
+        bitDepth: 8,
+      );
       
       if (success) {
         setState(() {
           _isAudioStreaming = true;
           _audioPacketsReceived = 0;
+          _totalAudioBytes = 0;
         });
-        _logEvent('🎤 Audio streaming active');
+        _logEvent('🎤 Audio streaming started (16kHz/8-bit)');
       } else {
         _logEvent('❌ Failed to start audio streaming');
       }
@@ -418,16 +404,11 @@ class MainAppState extends State<MainApp> {
     }
   }
 
-  // NEW: Stop audio streaming
   Future<void> _stopAudioStreaming() async {
-    if (_frameAudio == null || !_isAudioStreaming) return;
+    if (_frameAudioService == null || !_isAudioStreaming) return;
     
     try {
-      if (!Platform.isAndroid) {
-        _frameAudio!.stopMockAudioStream();
-      } else {
-        await _frameAudio!.stopAudioStream();
-      }
+      await _frameAudioService!.stopStreaming();
       
       setState(() {
         _isAudioStreaming = false;
@@ -440,10 +421,30 @@ class MainAppState extends State<MainApp> {
     }
   }
 
-  void _stopSession() {
+  Future<void> _startCameraCapture() async {
+    if (_frameClient == null || !_isConnected) return;
+    
+    try {
+      _logEvent('📷 Starting camera capture...');
+      
+      // Take a photo using Frame SDK
+      final photoData = await _frameClient!.takePhoto();
+      
+      if (photoData != null) {
+        setState(() {
+          _lastPhoto = photoData;
+        });
+        _logEvent('📸 Photo captured (${photoData.length} bytes)');
+      }
+    } catch (e) {
+      _logEvent('❌ Camera capture error: $e');
+    }
+  }
+
+  Future<void> _stopSession() async {
     if (!_isSessionActive) return;
 
-    _stopAudioStreaming();
+    await _stopAudioStreaming();
 
     setState(() {
       _isSessionActive = false;
@@ -452,240 +453,28 @@ class MainAppState extends State<MainApp> {
     _logEvent('⏹️ AI session stopped');
   }
 
-  Future<void> _simulateContextAwareConversation() async {
-    if (!_isSessionActive || _chatSession == null) return;
-    
-    try {
-      const userQuery = 'Hello! I am testing the Gemini integration with Frame smart glasses, MobileBERT embeddings, and real-time audio streaming.';
-      
-      // Get conversation context from vector database
-      String context = '';
-      if (_vectorDb != null) {
-        context = await _vectorDb!.getConversationContext(
-          currentQuery: userQuery,
-          maxResults: 3,
-          threshold: 0.3,
-        );
-      }
-      
-      // Create enhanced prompt with context
-      final enhancedPrompt = '''
-$context
-
-Current user message: $userQuery
-
-Audio streaming status: ${_isAudioStreaming ? 'Active' : 'Inactive'}
-Voice activity detected: ${_isVoiceDetected ? 'Yes' : 'No'}
-Audio packets received: $_audioPacketsReceived
-
-Please respond naturally, taking into account any relevant conversation history above and the current audio status.
-''';
-      
-      final response = await _chatSession!.sendMessage(
-        Content.text(enhancedPrompt)
-      );
-      
-      final responseText = response.text;
-      if (responseText != null && responseText.isNotEmpty) {
-        _logEvent('🤖 Gemini: $responseText');
-        
-        // Store both user query and response in vector database
-        if (_vectorDb != null) {
-          try {
-            // Store user query
-            await _vectorDb!.addTextWithEmbedding(
-              content: userQuery,
-              metadata: {
-                'type': 'user_message',
-                'timestamp': DateTime.now().toIso8601String(),
-                'source': 'user_input_audio',
-                'session_id': 'audio_test_session',
-                'has_audio': 'true',
-              },
-            );
-            
-            // Store assistant response
-            await _vectorDb!.addTextWithEmbedding(
-              content: responseText,
-              metadata: {
-                'type': 'assistant_response',
-                'timestamp': DateTime.now().toIso8601String(),
-                'source': 'gemini_response_audio',
-                'session_id': 'audio_test_session',
-                'audio_packets': _audioPacketsReceived.toString(),
-              },
-            );
-            
-            _logEvent('📚 Audio conversation stored in vector database');
-          } catch (e) {
-            _logEvent('⚠️ Failed to store conversation: $e');
-          }
-        }
-      }
-    } catch (e) {
-      _logEvent('❌ Gemini audio conversation error: $e');
-    }
-  }
-
-  void _logEvent(String event) {
-    final timestamp = DateTime.now().toString().substring(11, 19);
-    final logEntry = '[$timestamp] $event';
-    
-    setState(() {
-      _eventLog.add(logEntry);
-    });
-
-    // Auto-scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  // NEW: Test Frame audio functionality
-  Future<void> _testFrameAudio() async {
-    if (_frameAudio == null) {
-      _logEvent('❌ Frame audio service not initialized');
+  Future<void> _testFrameConnection() async {
+    if (_frameClient == null || !_isConnected) {
+      _logEvent('❌ Frame not connected');
       return;
     }
     
     try {
-      _logEvent('🧪 Testing Frame audio functionality...');
+      _logEvent('🧪 Testing Frame connection...');
       
-      final config = _frameAudio!.audioConfig;
-      _logEvent('🎵 Audio config: ${config['sampleRate']}Hz, ${config['channels']}ch, ${config['bitDepth']}bit');
-      _logEvent('📊 Streaming: ${config['isStreaming']}, Initialized: ${config['isInitialized']}');
-      _logEvent('📈 Packets: ${config['packetsReceived']}, Bytes: ${config['bytesReceived']}');
+      // Test battery level
+      final batteryLevel = await _frameClient!.getBatteryLevel();
+      _logEvent('🔋 Battery level: $batteryLevel%');
       
-      // Test VAD if available
-      if (_vad != null) {
-        _logEvent('🗣️ Voice Activity Detection ready');
-        _vad!.reset();
-        _logEvent('🔄 VAD state reset');
-      }
+      // Test display
+      await _frameClient!.sendText('Hello Frame!', align: frame.Alignment.topLeft);
+      _logEvent('📺 Display test sent');
       
-    } catch (e) {
-      _logEvent('❌ Frame audio test failed: $e');
-    }
-  }
-
-  // Existing methods remain the same...
-  Future<void> _testMobileBertModel() async {
-    if (_vectorDb == null) {
-      _logEvent('❌ MobileBERT vector database not initialized');
-      return;
-    }
-    
-    try {
-      _logEvent('🧪 Testing MobileBERT model...');
-      
-      // Test the model directly
-      await _vectorDb!.testModel();
-      
-      // Test embedding generation and storage
-      await _vectorDb!.addTextWithEmbedding(
-        content: 'This is a test of MobileBERT embedding generation with Frame audio integration',
-        metadata: {
-          'type': 'test',
-          'timestamp': DateTime.now().toIso8601String(),
-          'source': 'model_test_audio',
-          'has_frame_audio': 'true',
-        },
-      );
-      
-      // Test similarity search
-      final results = await _vectorDb!.queryText(
-        queryText: 'MobileBERT Frame audio test',
-        topK: 3,
-        threshold: 0.2,
-      );
-      
-      _logEvent('✅ MobileBERT test complete: ${results.length} similar results found');
-      
-      // Display results
-      for (final result in results) {
-        final score = ((result['score'] as double) * 100).round();
-        final content = result['document']?.toString() ?? '';
-        _logEvent('📄 Match $score%: ${content.substring(0, content.length.clamp(0, 50))}...');
-      }
+      // Get Frame info
+      _logEvent('📱 Frame connected and responsive');
       
     } catch (e) {
-      _logEvent('❌ MobileBERT test failed: $e');
-    }
-  }
-
-  Future<void> _addSampleData() async {
-    if (_vectorDb == null) {
-      _logEvent('❌ Vector database not initialized');
-      return;
-    }
-    
-    try {
-      _logEvent('📝 Adding sample data with MobileBERT embeddings...');
-      await _vectorDb!.addSampleData();
-      
-      // Add audio-specific sample data
-      const audioSamples = [
-        'User spoke through Frame glasses microphone',
-        'Voice activity detected in real-time audio stream',
-        'Audio conversation with Gemini AI assistant',
-        'Frame smart glasses audio integration working perfectly',
-      ];
-      
-      for (int i = 0; i < audioSamples.length; i++) {
-        final timestamp = DateTime.now().toIso8601String();
-        await _vectorDb!.addTextWithEmbedding(
-          content: audioSamples[i],
-          metadata: {
-            'type': 'audio_sample',
-            'index': i.toString(),
-            'timestamp': timestamp,
-            'source': 'audio_sample_generator',
-            'frame_audio': 'true',
-          },
-        );
-        
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-      
-      // Get updated stats
-      final stats = await _vectorDb!.getStats();
-      _logEvent('📊 Database updated: ${stats['totalDocuments']} docs, model: ${stats['embeddingModel']}');
-      
-    } catch (e) {
-      _logEvent('❌ Failed to add sample data: $e');
-    }
-  }
-
-  Future<void> _getVectorDatabaseStats() async {
-    if (_vectorDb == null) {
-      _logEvent('❌ Vector database not initialized');
-      return;
-    }
-    
-    try {
-      final stats = await _vectorDb!.getStats();
-      
-      _logEvent('📊 Vector DB Stats:');
-      _logEvent('  • Total documents: ${stats['totalDocuments']}');
-      _logEvent('  • With embeddings: ${stats['documentsWithEmbeddings']}');
-      _logEvent('  • Embedding model: ${stats['embeddingModel']}');
-      _logEvent('  • Avg dimensions: ${stats['averageEmbeddingDimensions']}');
-      _logEvent('  • Vocabulary size: ${stats['vocabularySize']}');
-      _logEvent('  • Max sequence length: ${stats['maxSequenceLength']}');
-      
-      if (stats['typeDistribution'] != null) {
-        final types = stats['typeDistribution'] as Map<String, int>;
-        _logEvent('  • Document types: ${types.entries.map((e) => '${e.key}:${e.value}').join(', ')}');
-      }
-      
-    } catch (e) {
-      _logEvent('❌ Failed to get stats: $e');
+      _logEvent('❌ Frame test failed: $e');
     }
   }
 
@@ -717,11 +506,11 @@ Please respond naturally, taking into account any relevant conversation history 
                     _buildFrameConnectionSection(),
                     const SizedBox(height: 16),
                     
-                    // NEW: Audio Status Section
-                    _buildAudioStatusSection(),
-                    const SizedBox(height: 16),
+                    // Audio Status Section
+                    if (_isConnected) _buildAudioStatusSection(),
+                    if (_isConnected) const SizedBox(height: 16),
                     
-                    // Live Photo View (placeholder)
+                    // Live Photo View
                     if (_lastPhoto != null) _buildPhotoView(),
                     if (_lastPhoto != null) const SizedBox(height: 16),
                     
@@ -744,8 +533,11 @@ Please respond naturally, taking into account any relevant conversation history 
     );
   }
 
-  // NEW: Audio status section
   Widget _buildAudioStatusSection() {
+    final kbps = _audioPacketsReceived > 0 && _totalAudioBytes > 0
+        ? (_totalAudioBytes / 1024.0) / (_audioPacketsReceived * 0.064) // ~64ms per packet
+        : 0.0;
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -798,13 +590,13 @@ Please respond naturally, taking into account any relevant conversation history 
             
             const SizedBox(height: 8),
             
-            // Audio packets counter
+            // Audio statistics
             Row(
               children: [
                 const Icon(Icons.data_usage, color: Colors.orange),
                 const SizedBox(width: 8),
                 Text(
-                  'Audio Packets: $_audioPacketsReceived',
+                  'Packets: $_audioPacketsReceived | ${(_totalAudioBytes / 1024).toStringAsFixed(1)} KB | ${kbps.toStringAsFixed(1)} KB/s',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
@@ -815,7 +607,6 @@ Please respond naturally, taking into account any relevant conversation history 
     );
   }
 
-  // Updated control buttons with audio controls
   Widget _buildControlButtons() {
     return Card(
       child: Padding(
@@ -834,13 +625,13 @@ Please respond naturally, taking into account any relevant conversation history 
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: (_connectedDevice != null && !_isSessionActive && _geminiApiKey.isNotEmpty) 
+                    onPressed: (_isConnected && !_isSessionActive && _geminiApiKey.isNotEmpty) 
                         ? _startSession 
                         : null,
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Start AI Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      backgroundColor: Colors.green.withOpacity(0.1),
                     ),
                   ),
                 ),
@@ -851,38 +642,7 @@ Please respond naturally, taking into account any relevant conversation history 
                     icon: const Icon(Icons.stop),
                     label: const Text('Stop Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.withValues(alpha: 0.1),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 8),
-            
-            // Audio specific controls
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (_connectedDevice != null && !_isAudioStreaming) 
-                        ? _startAudioStreaming 
-                        : null,
-                    icon: const Icon(Icons.mic),
-                    label: const Text('Start Audio'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.withValues(alpha: 0.1),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isAudioStreaming ? _stopAudioStreaming : null,
-                    icon: const Icon(Icons.mic_off),
-                    label: const Text('Stop Audio'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                      backgroundColor: Colors.red.withOpacity(0.1),
                     ),
                   ),
                 ),
@@ -896,17 +656,17 @@ Please respond naturally, taking into account any relevant conversation history 
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _testFrameAudio,
-                    icon: const Icon(Icons.audiotrack),
-                    label: const Text('Test Audio'),
+                    onPressed: _isConnected ? _testFrameConnection : null,
+                    icon: const Icon(Icons.troubleshoot),
+                    label: const Text('Test Frame'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _testMobileBertModel,
-                    icon: const Icon(Icons.psychology),
-                    label: const Text('Test MobileBERT'),
+                    onPressed: _isConnected ? _startCameraCapture : null,
+                    icon: const Icon(Icons.camera),
+                    label: const Text('Take Photo'),
                   ),
                 ),
               ],
@@ -919,7 +679,7 @@ Please respond naturally, taking into account any relevant conversation history 
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _addSampleData,
+                    onPressed: () => _vectorDb?.addSampleData(),
                     icon: const Icon(Icons.data_array),
                     label: const Text('Add Sample Data'),
                   ),
@@ -927,7 +687,12 @@ Please respond naturally, taking into account any relevant conversation history 
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _getVectorDatabaseStats,
+                    onPressed: () async {
+                      if (_vectorDb != null) {
+                        final stats = await _vectorDb!.getStats();
+                        _logEvent('📊 DB Stats: ${stats['totalDocuments']} docs');
+                      }
+                    },
                     icon: const Icon(Icons.analytics),
                     label: const Text('DB Stats'),
                   ),
@@ -935,34 +700,19 @@ Please respond naturally, taking into account any relevant conversation history 
               ],
             ),
             
-            const SizedBox(height: 8),
-            
-            // Clear button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _vectorDb != null ? () => _vectorDb!.clearAll() : null,
-                icon: const Icon(Icons.clear_all),
-                label: const Text('Clear Database'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-            
             // Status messages
             if (_isSessionActive)
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
                 child: Text(
-                  '🎤 AI session active with Frame audio streaming',
+                  '🎤 AI session active with Frame',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
                     color: Colors.blue,
                   ),
                 ),
               ),
-            if (_connectedDevice == null)
+            if (!_isConnected)
               const Padding(
                 padding: EdgeInsets.only(top: 8.0),
                 child: Text(
@@ -990,7 +740,6 @@ Please respond naturally, taking into account any relevant conversation history 
     );
   }
 
-  // Keep all existing widget methods unchanged...
   Widget _buildGeminiApiKeySection() {
     return Card(
       child: Padding(
@@ -1094,25 +843,20 @@ Please respond naturally, taking into account any relevant conversation history 
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-                if (_connectedDevice != null)
+                if (_isConnected)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.2),
+                      color: Colors.green.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                      border: Border.all(color: Colors.green.withOpacity(0.5)),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.bluetooth_connected, color: Colors.green, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          _connectedDevice!.platformName.isEmpty 
-                              ? 'Connected' 
-                              : _connectedDevice!.platformName,
-                          style: const TextStyle(color: Colors.green),
-                        ),
+                        Icon(Icons.bluetooth_connected, color: Colors.green, size: 16),
+                        SizedBox(width: 4),
+                        Text('Connected', style: TextStyle(color: Colors.green)),
                       ],
                     ),
                   ),
@@ -1123,7 +867,7 @@ Please respond naturally, taking into account any relevant conversation history 
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isScanning || (_connectedDevice != null) ? null : _startScanning,
+                    onPressed: _isScanning || _isConnected ? null : _startScanning,
                     icon: _isScanning 
                         ? const SizedBox(
                             width: 16,
@@ -1135,20 +879,20 @@ Please respond naturally, taking into account any relevant conversation history 
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (_connectedDevice != null)
+                if (_isConnected)
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _disconnect,
                       icon: const Icon(Icons.bluetooth_disabled),
                       label: const Text('Disconnect'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.withValues(alpha: 0.1),
+                        backgroundColor: Colors.red.withOpacity(0.1),
                       ),
                     ),
                   ),
               ],
             ),
-            if (_availableDevices.isNotEmpty) ...[
+            if (_scanResults.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Text('Available Devices:'),
               const SizedBox(height: 8),
@@ -1156,15 +900,15 @@ Please respond naturally, taking into account any relevant conversation history 
                 constraints: const BoxConstraints(maxHeight: 200),
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: _availableDevices.length,
+                  itemCount: _scanResults.length,
                   itemBuilder: (context, index) {
-                    final device = _availableDevices[index];
+                    final result = _scanResults[index];
                     return ListTile(
                       leading: const Icon(Icons.smartphone),
-                      title: Text(device.platformName.isEmpty ? 'Unknown Device' : device.platformName),
-                      subtitle: Text(device.remoteId.str),
+                      title: Text(result.device.name),
+                      subtitle: Text('RSSI: ${result.rssi}'),
                       trailing: ElevatedButton(
-                        onPressed: () => _connectToDevice(device),
+                        onPressed: () => _connectToFrame(result),
                         child: const Text('Connect'),
                       ),
                     );
@@ -1211,7 +955,7 @@ Please respond naturally, taking into account any relevant conversation history 
                         ),
                       )
                     : const Center(
-                        child: Text('Camera feed coming soon'),
+                        child: Text('No photo captured yet'),
                       ),
               ),
             ),
@@ -1252,7 +996,7 @@ Please respond naturally, taking into account any relevant conversation history 
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.grey.withOpacity(0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _eventLog.isEmpty
@@ -1288,5 +1032,25 @@ Please respond naturally, taking into account any relevant conversation history 
         ),
       ),
     );
+  }
+
+  void _logEvent(String event) {
+    final timestamp = DateTime.now().toString().substring(11, 19);
+    final logEntry = '[$timestamp] $event';
+    
+    setState(() {
+      _eventLog.add(logEntry);
+    });
+
+    // Auto-scroll to bottom
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 }
