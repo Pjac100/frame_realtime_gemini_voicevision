@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:frame_msg/frame_msg.dart' as frame;
+import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:simple_frame_app/tx/plain_text.dart';
+import 'package:simple_frame_app/tx/code.dart';
+import 'package:simple_frame_app/tx/image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -75,17 +78,16 @@ class MainApp extends StatefulWidget {
 }
 
 class MainAppState extends State<MainApp> {
-  // Frame connection using official SDK
-  frame.FrameClient? _frameClient;
+  // Frame connection using simple_frame_app
+  FrameApp? _frameApp;
   bool _isConnected = false;
   bool _isScanning = false;
-  final List<frame.ScanResult> _scanResults = [];
   
   // AI Configuration
   String _geminiApiKey = '';
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
   GenerativeModel? _model;
-  ChatSession? _chatSession;
+  ChatSession? _chatSession; // TODO: Use for actual Gemini conversations once audio STT is integrated
   
   // Session state
   bool _isSessionActive = false;
@@ -108,6 +110,7 @@ class MainAppState extends State<MainApp> {
   FrameAudioStreamingService? _frameAudioService;
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<String>? _frameLogSubscription;
+  StreamSubscription<dynamic>? _frameDataSubscription;
 
   @override
   void initState() {
@@ -123,8 +126,9 @@ class MainAppState extends State<MainApp> {
     _scrollController.dispose();
     _audioSubscription?.cancel();
     _frameLogSubscription?.cancel();
+    _frameDataSubscription?.cancel();
     _frameAudioService?.dispose();
-    _frameClient?.disconnect();
+    _frameApp?.disconnect();
     _vectorDb?.dispose();
     super.dispose();
   }
@@ -135,8 +139,8 @@ class MainAppState extends State<MainApp> {
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
-      // Initialize Frame client
-      _frameClient = frame.FrameClient();
+      // Initialize Frame app
+      _frameApp = FrameApp();
       
       // Initialize Frame audio streaming service
       _frameAudioService = FrameAudioStreamingService(_logEvent);
@@ -217,31 +221,17 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startScanning() async {
-    if (_isScanning || _frameClient == null) return;
+    if (_isScanning || _frameApp == null) return;
     
     setState(() {
       _isScanning = true;
-      _scanResults.clear();
     });
     
     _logEvent('🔍 Scanning for Frame devices...');
     
     try {
-      // Use Frame SDK scanning
-      final scanStream = _frameClient!.startScan();
-      
-      scanStream.listen((result) {
-        if (!_scanResults.any((r) => r.device.btDevice.remoteId == result.device.btDevice.remoteId)) {
-          setState(() {
-            _scanResults.add(result);
-          });
-          _logEvent('📱 Found Frame: ${result.device.name}');
-        }
-      });
-      
-      // Stop scanning after 10 seconds
-      await Future.delayed(const Duration(seconds: 10));
-      await _frameClient!.stopScan();
+      // Simple Frame App handles scanning and connection in one step
+      await _connectToFrame();
       
     } catch (e) {
       _logEvent('❌ Scan error: $e');
@@ -249,25 +239,31 @@ class MainAppState extends State<MainApp> {
       setState(() {
         _isScanning = false;
       });
-      _logEvent('🔍 Scan completed');
     }
   }
 
-  Future<void> _connectToFrame(frame.ScanResult scanResult) async {
+  Future<void> _connectToFrame() async {
     try {
-      _logEvent('🔗 Connecting to ${scanResult.device.name}...');
+      _logEvent('🔗 Connecting to Frame...');
       
-      // Connect using Frame SDK
-      await _frameClient!.connect(scanResult);
+      // Connect using simple_frame_app
+      final connected = await _frameApp!.connect();
       
-      setState(() {
-        _isConnected = true;
-      });
-      
-      _logEvent('✅ Connected to ${scanResult.device.name}');
-      
-      // Initialize Frame audio streaming
-      await _initializeFrameAudio();
+      if (connected) {
+        setState(() {
+          _isConnected = true;
+        });
+        
+        _logEvent('✅ Connected to Frame');
+        
+        // Setup Frame listeners
+        _setupFrameListeners();
+        
+        // Initialize Frame audio streaming
+        await _initializeFrameAudio();
+      } else {
+        _logEvent('❌ Failed to connect to Frame');
+      }
       
     } catch (e) {
       _logEvent('❌ Connection failed: $e');
@@ -277,13 +273,22 @@ class MainAppState extends State<MainApp> {
     }
   }
 
+  void _setupFrameListeners() {
+    // Listen for raw data from Frame
+    _frameDataSubscription = _frameApp!.dataResponse.listen((data) {
+      if (data != null && data is Map) {
+        _logEvent('📦 Frame data received: ${data['type'] ?? 'unknown'}');
+      }
+    });
+  }
+
   Future<void> _initializeFrameAudio() async {
-    if (_frameClient == null || _frameAudioService == null || !_isConnected) return;
+    if (_frameApp == null || _frameAudioService == null || !_isConnected) return;
     
     try {
       _logEvent('🎤 Initializing Frame audio streaming...');
       
-      final success = await _frameAudioService!.initialize(_frameClient!);
+      final success = await _frameAudioService!.initialize(_frameApp!);
       if (success) {
         _logEvent('✅ Frame audio service ready');
         
@@ -339,9 +344,9 @@ class MainAppState extends State<MainApp> {
 
   Future<void> _disconnect() async {
     try {
-      if (_frameClient != null && _isConnected) {
+      if (_frameApp != null && _isConnected) {
         await _stopSession();
-        await _frameClient!.disconnect();
+        await _frameApp!.disconnect();
         
         setState(() {
           _isConnected = false;
@@ -422,20 +427,20 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startCameraCapture() async {
-    if (_frameClient == null || !_isConnected) return;
+    if (_frameApp == null || !_isConnected) return;
     
     try {
       _logEvent('📷 Starting camera capture...');
       
-      // Take a photo using Frame SDK
-      final photoData = await _frameClient!.takePhoto();
+      // Request a photo using simple_frame_app
+      await _frameApp!.sendMessage(
+        TxImage(
+          msgCode: 0x0d, // Take photo command
+          qualityIndex: 50,
+        ),
+      );
       
-      if (photoData != null) {
-        setState(() {
-          _lastPhoto = photoData;
-        });
-        _logEvent('📸 Photo captured (${photoData.length} bytes)');
-      }
+      _logEvent('📸 Photo request sent');
     } catch (e) {
       _logEvent('❌ Camera capture error: $e');
     }
@@ -454,7 +459,7 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _testFrameConnection() async {
-    if (_frameClient == null || !_isConnected) {
+    if (_frameApp == null || !_isConnected) {
       _logEvent('❌ Frame not connected');
       return;
     }
@@ -462,15 +467,19 @@ class MainAppState extends State<MainApp> {
     try {
       _logEvent('🧪 Testing Frame connection...');
       
-      // Test battery level
-      final batteryLevel = await _frameClient!.getBatteryLevel();
-      _logEvent('🔋 Battery level: $batteryLevel%');
-      
-      // Test display
-      await _frameClient!.sendText('Hello Frame!', align: frame.Alignment.topLeft);
+      // Test display with text
+      await _frameApp!.sendMessage(
+        TxPlainText(
+          msgCode: 0x0a,
+          text: 'Hello Frame!',
+          x: 50,
+          y: 50,
+          color: 0x00FF00, // Green
+        ),
+      );
       _logEvent('📺 Display test sent');
       
-      // Get Frame info
+      // Get battery level (this would require implementing in Frame app)
       _logEvent('📱 Frame connected and responsive');
       
     } catch (e) {
@@ -631,7 +640,7 @@ class MainAppState extends State<MainApp> {
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Start AI Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.withOpacity(0.1),
+                      backgroundColor: Colors.green.withValues(alpha: 0.1),
                     ),
                   ),
                 ),
@@ -642,7 +651,7 @@ class MainAppState extends State<MainApp> {
                     icon: const Icon(Icons.stop),
                     label: const Text('Stop Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.withOpacity(0.1),
+                      backgroundColor: Colors.red.withValues(alpha: 0.1),
                     ),
                   ),
                 ),
@@ -847,9 +856,9 @@ class MainAppState extends State<MainApp> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withOpacity(0.5)),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -875,7 +884,7 @@ class MainAppState extends State<MainApp> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.search),
-                    label: Text(_isScanning ? 'Scanning...' : 'Scan for Frame'),
+                    label: Text(_isScanning ? 'Connecting...' : 'Connect to Frame'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -886,36 +895,12 @@ class MainAppState extends State<MainApp> {
                       icon: const Icon(Icons.bluetooth_disabled),
                       label: const Text('Disconnect'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.withOpacity(0.1),
+                        backgroundColor: Colors.red.withValues(alpha: 0.1),
                       ),
                     ),
                   ),
               ],
             ),
-            if (_scanResults.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text('Available Devices:'),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _scanResults.length,
-                  itemBuilder: (context, index) {
-                    final result = _scanResults[index];
-                    return ListTile(
-                      leading: const Icon(Icons.smartphone),
-                      title: Text(result.device.name),
-                      subtitle: Text('RSSI: ${result.rssi}'),
-                      trailing: ElevatedButton(
-                        onPressed: () => _connectToFrame(result),
-                        child: const Text('Connect'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -996,7 +981,7 @@ class MainAppState extends State<MainApp> {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _eventLog.isEmpty
