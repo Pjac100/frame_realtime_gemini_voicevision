@@ -1,12 +1,14 @@
 // lib/services/frame_audio_streaming_service.dart
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:frame_msg/frame_msg.dart' as frame;
+import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:simple_frame_app/tx/code.dart';
+import 'package:simple_frame_app/rx/rx.dart';
 
-/// Frame audio streaming service that uses the official SDK
-/// Handles Lua script upload and audio data streaming via frame-msg protocol
+/// Frame audio streaming service that uses simple_frame_app
+/// Handles Lua script upload and audio data streaming
 class FrameAudioStreamingService {
-  frame.FrameClient? _client;
+  FrameApp? _frameApp;
   
   // Audio streaming state
   bool _isStreaming = false;
@@ -28,26 +30,29 @@ class FrameAudioStreamingService {
   DateTime? _streamStartTime;
   
   // Message types for Frame communication
-  static const int MSG_START_AUDIO = 1;
-  static const int MSG_STOP_AUDIO = 2;
-  static const int MSG_AUDIO_CHUNK = 3;
+  static const int msgStartAudio = 1;
+  static const int msgStopAudio = 2;
+  static const int msgAudioChunk = 3;
+  
+  // Subscription for Frame responses
+  StreamSubscription<dynamic>? _frameDataSubscription;
   
   final void Function(String) _emit;
 
   FrameAudioStreamingService([void Function(String msg)? logger])
       : _emit = logger ?? ((_) {});
 
-  /// Initialize the service with a connected Frame client
-  Future<bool> initialize(frame.FrameClient client) async {
+  /// Initialize the service with a connected Frame app
+  Future<bool> initialize(FrameApp frameApp) async {
     try {
       _emit('🎤 Initializing Frame audio streaming service...');
-      _client = client;
+      _frameApp = frameApp;
       
       // Upload the main Lua application for audio streaming
       await _uploadAudioApp();
       
       // Subscribe to Frame data messages
-      _client!.dataResponse.listen(_handleFrameData);
+      _frameDataSubscription = _frameApp!.dataResponse.listen(_handleFrameData);
       
       _isInitialized = true;
       _emit('✅ Frame audio service initialized');
@@ -64,7 +69,7 @@ class FrameAudioStreamingService {
   Future<void> _uploadAudioApp() async {
     _emit('📤 Uploading audio app to Frame...');
     
-    final luaScript = '''
+    const luaScript = '''
 -- Frame Audio Streaming Application
 local data = require('data')
 
@@ -148,19 +153,38 @@ end
 app_loop()
 ''';
 
-    // Upload and run the Lua script
-    await _client!.uploadFile('audio_app.lua', luaScript);
-    await _client!.runLua('audio_app.lua');
+    // Upload and run the Lua script using TxCode
+    await _frameApp!.sendMessage(
+      TxCode(
+        msgCode: 0x0b, // Code upload/execute
+        luaScript: luaScript,
+      ),
+    );
     
     _emit('✅ Audio app uploaded and running');
   }
 
   /// Handle data messages from Frame
-  void _handleFrameData(frame.DataResponse response) {
-    if (response.messageType == MSG_AUDIO_CHUNK) {
-      // Audio data received
-      final audioData = response.data;
-      if (audioData != null) {
+  void _handleFrameData(dynamic data) {
+    if (data == null) return;
+    
+    // Check if it's an RxData message with audio
+    if (data is Map && data['type'] == 'data') {
+      final messageType = data['message_type'] ?? data['msgType'];
+      final payload = data['data'] ?? data['payload'];
+      
+      if (messageType == msgAudioChunk && payload != null) {
+        // Audio data received
+        Uint8List audioData;
+        
+        if (payload is List<int>) {
+          audioData = Uint8List.fromList(payload);
+        } else if (payload is Uint8List) {
+          audioData = payload;
+        } else {
+          return;
+        }
+        
         _packetsReceived++;
         _bytesReceived += audioData.length;
         
@@ -179,7 +203,7 @@ app_loop()
 
   /// Start audio streaming with specified parameters
   Future<bool> startStreaming({int sampleRate = 16000, int bitDepth = 8}) async {
-    if (!_isInitialized || _isStreaming || _client == null) {
+    if (!_isInitialized || _isStreaming || _frameApp == null) {
       _emit('⚠️ Cannot start audio stream - not initialized or already streaming');
       return false;
     }
@@ -199,7 +223,7 @@ app_loop()
     final bandwidthKBps = (sampleRate * bitDepth / 8) / 1024.0;
     final bandwidthPercent = (bandwidthKBps / 40.0) * 100; // 40 kB/s max
     
-    _emit('🎤 Starting audio stream: ${sampleRate}Hz, ${bitDepth}-bit');
+    _emit('🎤 Starting audio stream: ${sampleRate}Hz, $bitDepth-bit');
     _emit('📊 Bandwidth: ${bandwidthKBps.toStringAsFixed(1)} kB/s (${bandwidthPercent.toStringAsFixed(0)}% of max)');
     
     if (bandwidthPercent > 80) {
@@ -213,10 +237,12 @@ app_loop()
       params.setUint8(2, bitDepth);
       params.setUint8(3, 0); // Reserved
       
-      // Send start command to Frame
-      await _client!.sendMessage(
-        MSG_START_AUDIO,
-        params.buffer.asUint8List(),
+      // Send start command to Frame using raw data message
+      await _frameApp!.sendMessage(
+        TxRawData(
+          msgCode: msgStartAudio,
+          data: params.buffer.asUint8List(),
+        ),
       );
       
       // Reset statistics
@@ -239,7 +265,7 @@ app_loop()
 
   /// Stop audio streaming
   Future<bool> stopStreaming() async {
-    if (!_isStreaming || _client == null) {
+    if (!_isStreaming || _frameApp == null) {
       _emit('⚠️ Audio stream not active');
       return false;
     }
@@ -248,7 +274,12 @@ app_loop()
       _emit('⏹️ Stopping audio stream...');
       
       // Send stop command to Frame
-      await _client!.sendMessage(MSG_STOP_AUDIO, Uint8List(0));
+      await _frameApp!.sendMessage(
+        TxRawData(
+          msgCode: msgStopAudio,
+          data: Uint8List(0),
+        ),
+      );
       
       _isStreaming = false;
       
@@ -286,42 +317,52 @@ app_loop()
 
   /// Send display text to Frame (for testing)
   Future<void> sendDisplayText(String text) async {
-    if (_client != null) {
-      await _client!.sendText(text);
+    if (_frameApp != null) {
+      await _frameApp!.sendMessage(
+        TxPlainText(
+          msgCode: 0x0a,
+          text: text,
+          x: 50,
+          y: 100,
+        ),
+      );
       _emit('📺 Sent to display: "$text"');
     }
   }
 
   /// Clear Frame display
   Future<void> clearDisplay() async {
-    if (_client != null) {
-      await _client!.clearDisplay();
+    if (_frameApp != null) {
+      await _frameApp!.sendMessage(
+        TxClearDisplay(msgCode: 0x10),
+      );
       _emit('📺 Display cleared');
     }
-  }
-
-  /// Get battery level
-  Future<int?> getBatteryLevel() async {
-    if (_client != null) {
-      try {
-        final level = await _client!.getBatteryLevel();
-        _emit('🔋 Battery level: $level%');
-        return level;
-      } catch (e) {
-        _emit('❌ Failed to get battery level: $e');
-        return null;
-      }
-    }
-    return null;
   }
 
   /// Cleanup resources
   void dispose() {
     stopStreaming();
+    _frameDataSubscription?.cancel();
     _audioDataController.close();
     _logController.close();
     _emit('🧹 Frame audio service disposed');
   }
+}
+
+/// Helper class for raw data messages
+class TxRawData {
+  final int msgCode;
+  final Uint8List data;
+  
+  TxRawData({required this.msgCode, required this.data});
+}
+
+/// Helper class for clear display message
+class TxClearDisplay {
+  final int msgCode;
+  
+  TxClearDisplay({required this.msgCode});
 }
 
 /// Helper class for processing Frame audio data
