@@ -41,31 +41,43 @@ class FrameAudioStreamingService {
   FrameAudioStreamingService([void Function(String msg)? logger])
       : _emit = logger ?? ((_) {});
 
-  /// Simplified initialization following official pattern
+  /// Initialize service without deploying scripts (to avoid disconnection)
   Future<bool> initialize(BrilliantDevice frameDevice) async {
     try {
-      _emit('🎤 Initializing Frame audio (simplified approach)...');
+      _emit('🎤 Setting up Frame audio service...');
       _frameDevice = frameDevice;
       
       // Subscribe to Frame data messages
       _frameDataSubscription = _frameDevice!.dataResponse.listen(_handleFrameData);
       
-      // Single attempt deployment - keep it simple
-      await _uploadAudioApp();
-      
-      // Brief verification with simple response check
-      await Future.delayed(const Duration(milliseconds: 500));
-      
+      // Don't deploy scripts here - wait until session start
       _isInitialized = true;
-      _emit('✅ Frame audio service ready');
+      _emit('✅ Frame audio service ready (script deployment deferred)');
       return true;
       
     } catch (e) {
-      _emit('❌ Frame audio initialization failed: $e');
+      _emit('❌ Frame audio service setup failed: $e');
       _isInitialized = false;
       _frameDataSubscription?.cancel();
+      return false;
+    }
+  }
+  
+  /// Deploy audio scripts only when starting a session
+  Future<bool> deployAudioScripts() async {
+    if (_frameDevice == null) {
+      _emit('❌ No Frame device available for script deployment');
+      return false;
+    }
+    
+    try {
+      _emit('📤 Deploying audio scripts for session...');
+      await _uploadAudioApp();
+      _emit('✅ Audio scripts deployed');
+      return true;
       
-      // Don't throw - allow app to continue and retry later
+    } catch (e) {
+      _emit('❌ Script deployment failed: $e');
       return false;
     }
   }

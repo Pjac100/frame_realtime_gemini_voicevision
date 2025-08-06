@@ -85,6 +85,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // AI Configuration
   String _geminiApiKey = '';
+  String? _tempApiKey; // Temporary storage for API key input
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
   GenerativeModel? _model; // TODO: Will be used for Gemini chat sessions
   ChatSession? _chatSession;
@@ -259,9 +260,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     await prefs.setString('gemini_api_key', key);
     setState(() {
       _geminiApiKey = key;
+      _tempApiKey = null; // Clear temp key
     });
     _initializeGemini();
-    _logEvent('🔑 API key saved and Gemini initialized');
+    _logEvent('🔑 Gemini API key saved and initialized');
   }
 
   Future<void> _startScanning() async {
@@ -290,26 +292,43 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🔗 Connecting to Frame...');
       
-      // Simplified connection following official pattern
+      // Clear any previous state
+      setState(() {
+        _isConnected = false;
+      });
+      
+      // Simple connection attempt
       await scanOrReconnectFrame();
       
-      if (currentState == ApplicationState.connected) {
+      // Wait a moment for connection to stabilize
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (currentState == ApplicationState.connected && frame != null) {
         setState(() {
           _isConnected = true;
         });
         
-        _logEvent('✅ Frame connected successfully');
+        _logEvent('✅ Frame connected - setting up services...');
         
-        // Initialize Frame-specific services only after connection
-        await _initializeFrameServices();
+        // Initialize Frame-specific services without blocking connection
+        try {
+          await _initializeFrameServices();
+          _setupFrameListeners();
+          _logEvent('✅ Frame services ready');
+        } catch (e) {
+          _logEvent('⚠️ Service setup warning: $e');
+          // Don't fail the connection for service issues
+        }
         
-        // Setup Frame listeners
-        _setupFrameListeners();
+        // Test Frame responsiveness without deploying complex scripts
+        try {
+          await _testBasicFrameConnection();
+        } catch (e) {
+          _logEvent('⚠️ Frame test warning: $e');
+        }
         
-        // Initialize Frame audio with simplified approach
-        await _initializeFrameAudioSimplified();
       } else {
-        _logEvent('❌ Frame connection failed');
+        _logEvent('❌ Frame connection failed - state: $currentState');
         setState(() {
           _isConnected = false;
         });
@@ -320,6 +339,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       setState(() {
         _isConnected = false;
       });
+    }
+  }
+  
+  /// Test basic Frame connection without complex operations
+  Future<void> _testBasicFrameConnection() async {
+    if (frame == null) return;
+    
+    try {
+      // Simple test that shouldn't cause disconnection
+      await frame!.sendString('print("Connected to host")', awaitResponse: false);
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      _logEvent('✅ Frame basic test successful');
+      
+    } catch (e) {
+      _logEvent('⚠️ Frame test failed: $e');
     }
   }
 
@@ -341,10 +376,39 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           }
         }
       });
+      
+      // Monitor connection state
+      _startConnectionMonitoring();
     }
   }
+  
+  /// Monitor Frame connection state and handle disconnections
+  void _startConnectionMonitoring() {
+    Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      // Check if Frame is still connected
+      if (_isConnected && (frame == null || currentState != ApplicationState.connected)) {
+        _logEvent('⚠️ Frame disconnection detected');
+        setState(() {
+          _isConnected = false;
+          _isSessionActive = false;
+        });
+        
+        // Clean up services
+        _frameAudioService?.dispose();
+        _frameGeminiIntegration?.dispose();
+        _frameDataSubscription?.cancel();
+        
+        timer.cancel();
+      }
+    });
+  }
 
-  /// Simplified Frame audio initialization following official pattern
+  /// Initialize Frame audio services without deploying scripts (to avoid disconnection)
   Future<void> _initializeFrameAudioSimplified() async {
     if (frame == null || !_isConnected) {
       _logEvent('❌ Frame not available for audio initialization');
@@ -352,88 +416,34 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
     
     try {
-      _logEvent('🎤 Initializing Frame audio (simplified)...');
+      _logEvent('🎤 Preparing Frame audio services...');
       
-      // Test Frame responsiveness first
-      await frame!.sendString('print("Audio init test")', awaitResponse: false);
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (_frameAudioService != null) {
-        // Simplified initialization - no complex Lua deployment
-        final success = await _frameAudioService!.testConnection();
+      if (_frameAudioService != null && _geminiRealtime != null) {
+        // Create integration service but don't deploy scripts yet
+        _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
+          frameAudioService: _frameAudioService!,
+          geminiRealtime: _geminiRealtime!,
+          frameDevice: frame,
+          vectorDb: _vectorDb,
+          logger: _logEvent,
+        );
         
-        if (success) {
-          _logEvent('✅ Frame audio connection verified');
-          
-          // Create integration service only if basic connection works
-          if (_geminiRealtime != null) {
-            _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
-              frameAudioService: _frameAudioService!,
-              geminiRealtime: _geminiRealtime!,
-              frameDevice: frame,
-              vectorDb: _vectorDb,
-              logger: _logEvent,
-            );
-            
-            // Simple integration initialization
-            final integrationReady = await _frameGeminiIntegration!.initialize();
-            if (integrationReady) {
-              _logEvent('✅ Ready for voice conversations');
-              
-              // Set up audio stream listener
-              _audioSubscription = _frameAudioService!.audioStream.listen(_handleAudioData);
-            } else {
-              _logEvent('⚠️ Integration setup had issues, basic audio available');
-            }
-          }
+        // Initialize integration without Frame script deployment
+        final integrationReady = await _frameGeminiIntegration!.initialize();
+        if (integrationReady) {
+          _logEvent('✅ Audio services ready (scripts will load on session start)');
         } else {
-          _logEvent('⚠️ Frame audio test failed, will retry on session start');
+          _logEvent('⚠️ Audio services partially ready');
         }
       }
       
     } catch (e) {
-      _logEvent('❌ Simplified audio init error: $e');
-      _logEvent('ℹ️ Will attempt audio setup when starting session');
+      _logEvent('❌ Audio service prep error: $e');
+      _logEvent('ℹ️ Audio setup will be attempted when starting session');
     }
   }
 
-  void _handleAudioData(Uint8List audioData) {
-    setState(() {
-      _audioPacketsReceived++;
-      _totalAudioBytes += audioData.length;
-    });
-    
-    // Perform voice activity detection
-    final voiceDetected = _detectVoiceActivity(audioData);
-    if (voiceDetected != _isVoiceDetected) {
-      setState(() {
-        _isVoiceDetected = voiceDetected;
-      });
-      
-      if (voiceDetected) {
-        _logEvent('🗣️ Voice activity detected');
-      } else {
-        _logEvent('🤫 Voice activity stopped');
-      }
-    }
-    
-    // Audio processing now handled by FrameGeminiRealtimeIntegration service
-  }
 
-  bool _detectVoiceActivity(Uint8List audioData) {
-    // Simple energy-based VAD
-    double energy = 0.0;
-    for (int i = 0; i < audioData.length; i += 2) {
-      if (i + 1 < audioData.length) {
-        final sample = (audioData[i] | (audioData[i + 1] << 8));
-        final normalizedSample = (sample > 32767 ? sample - 65536 : sample) / 32768.0;
-        energy += normalizedSample * normalizedSample;
-      }
-    }
-    energy = energy / (audioData.length / 2);
-    
-    return energy > 0.01; // Simple threshold
-  }
 
   Future<void> _disconnect() async {
     try {
@@ -461,13 +471,26 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _logEvent('⚠️ Please set Gemini API key first');
         return;
       }
+      if (!_isConnected) {
+        _logEvent('⚠️ Frame not connected - please connect first');
+        return;
+      }
       return;
     }
 
     try {
-      _logEvent('🚀 Starting complete AI session...');
+      _logEvent('🚀 Starting AI session...');
       
-      // Use the new integrated service if available
+      // Deploy Frame scripts now (not during connection)
+      if (_frameAudioService != null) {
+        _logEvent('📤 Deploying Frame audio scripts...');
+        final scriptsDeployed = await _frameAudioService!.deployAudioScripts();
+        if (!scriptsDeployed) {
+          _logEvent('⚠️ Script deployment failed, continuing with basic features');
+        }
+      }
+      
+      // Use the integrated service if available
       if (_frameGeminiIntegration != null) {
         final success = await _frameGeminiIntegration!.startSession(
           geminiApiKey: _geminiApiKey,
@@ -481,24 +504,22 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           setState(() {
             _isSessionActive = true;
           });
-          _logEvent('✅ Complete AI session started successfully');
+          _logEvent('✅ AI session started successfully');
           
           // Start camera capture for vision
           await _startCameraCapture();
         } else {
-          _logEvent('❌ Failed to start complete AI session');
+          _logEvent('❌ Failed to start AI session');
         }
       } else {
-        // Fall back to the old method
+        // Fallback mode
         setState(() {
           _isSessionActive = true;
         });
-        _logEvent('🎤 AI session started with Frame audio (fallback mode)');
+        _logEvent('🎤 AI session started (basic mode)');
         
-        // Start audio streaming
+        // Start audio streaming and camera
         await _startAudioStreaming();
-        
-        // Start camera capture
         await _startCameraCapture();
       }
     } catch (e) {
@@ -991,19 +1012,36 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            TextFormField(
-              initialValue: _geminiApiKey,
-              decoration: const InputDecoration(
-                labelText: 'Gemini API Key',
-                hintText: 'Enter your Gemini API key',
-                border: OutlineInputBorder(),
-              ),
-              obscureText: true,
-              onFieldSubmitted: (value) {
-                if (value.isNotEmpty) {
-                  _saveGeminiApiKey(value);
-                }
-              },
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: _geminiApiKey,
+                    decoration: const InputDecoration(
+                      labelText: 'Gemini API Key',
+                      hintText: 'Enter your Gemini API key',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    onChanged: (value) {
+                      setState(() {
+                        _tempApiKey = value;
+                      });
+                    },
+                    onFieldSubmitted: (value) {
+                      if (value.isNotEmpty) {
+                        _saveGeminiApiKey(value);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: (_tempApiKey?.isNotEmpty ?? false) ? () => _saveGeminiApiKey(_tempApiKey!) : null,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Save'),
+                ),
+              ],
             ),
             if (_geminiApiKey.isNotEmpty)
               Padding(
@@ -1287,4 +1325,5 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     currentState = ApplicationState.ready;
     if (mounted) setState(() {});
   }
+  
 }
