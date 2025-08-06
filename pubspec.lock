@@ -329,7 +329,7 @@ packages:
     source: sdk
     version: "0.0.0"
   frame_ble:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: frame_ble
       sha256: e60e6448985ec8f190afd85e384108d6052441a22237c1fb6f0b71c8c4046a9c

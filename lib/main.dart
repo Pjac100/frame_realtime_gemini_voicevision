@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
-import 'package:simple_frame_app/tx/plain_text.dart';
-import 'package:simple_frame_app/tx/code.dart';
-import 'package:simple_frame_app/tx/image.dart';
+import 'package:frame_msg/tx/plain_text.dart';
+import 'package:frame_msg/tx/capture_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -77,9 +75,9 @@ class MainApp extends StatefulWidget {
   State<MainApp> createState() => MainAppState();
 }
 
-class MainAppState extends State<MainApp> {
+class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // Frame connection using simple_frame_app
-  FrameApp? _frameApp;
+  // FrameApp is now available through the mixin
   bool _isConnected = false;
   bool _isScanning = false;
   
@@ -128,7 +126,9 @@ class MainAppState extends State<MainApp> {
     _frameLogSubscription?.cancel();
     _frameDataSubscription?.cancel();
     _frameAudioService?.dispose();
-    _frameApp?.disconnect();
+    if (frame != null) {
+      disconnectFrame();
+    }
     _vectorDb?.dispose();
     super.dispose();
   }
@@ -139,8 +139,8 @@ class MainAppState extends State<MainApp> {
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
-      // Initialize Frame app
-      _frameApp = FrameApp();
+      // Frame app is available through SimpleFrameAppState mixin
+      // No need to initialize separately
       
       // Initialize Frame audio streaming service
       _frameAudioService = FrameAudioStreamingService(_logEvent);
@@ -221,7 +221,7 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startScanning() async {
-    if (_isScanning || _frameApp == null) return;
+    if (_isScanning) return;
     
     setState(() {
       _isScanning = true;
@@ -246,8 +246,9 @@ class MainAppState extends State<MainApp> {
     try {
       _logEvent('🔗 Connecting to Frame...');
       
-      // Connect using simple_frame_app
-      final connected = await _frameApp!.connect();
+      // Connect using simple_frame_app mixin
+      await scanOrReconnectFrame();
+      final connected = currentState == ApplicationState.connected;
       
       if (connected) {
         setState(() {
@@ -274,21 +275,23 @@ class MainAppState extends State<MainApp> {
   }
 
   void _setupFrameListeners() {
-    // Listen for raw data from Frame
-    _frameDataSubscription = _frameApp!.dataResponse.listen((data) {
-      if (data != null && data is Map) {
-        _logEvent('📦 Frame data received: ${data['type'] ?? 'unknown'}');
-      }
-    });
+    // Listen for raw data from Frame using the mixin's frame object
+    if (frame != null) {
+      _frameDataSubscription = frame!.dataResponse.listen((data) {
+        if (data.isNotEmpty) {
+          _logEvent('📦 Frame data received: ${data.length} bytes');
+        }
+      });
+    }
   }
 
   Future<void> _initializeFrameAudio() async {
-    if (_frameApp == null || _frameAudioService == null || !_isConnected) return;
+    if (frame == null || _frameAudioService == null || !_isConnected) return;
     
     try {
       _logEvent('🎤 Initializing Frame audio streaming...');
       
-      final success = await _frameAudioService!.initialize(_frameApp!);
+      final success = await _frameAudioService!.initialize(frame!);
       if (success) {
         _logEvent('✅ Frame audio service ready');
         
@@ -344,9 +347,9 @@ class MainAppState extends State<MainApp> {
 
   Future<void> _disconnect() async {
     try {
-      if (_frameApp != null && _isConnected) {
+      if (frame != null && _isConnected) {
         await _stopSession();
-        await _frameApp!.disconnect();
+        await disconnectFrame();
         
         setState(() {
           _isConnected = false;
@@ -427,18 +430,15 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _startCameraCapture() async {
-    if (_frameApp == null || !_isConnected) return;
+    if (frame == null || !_isConnected) return;
     
     try {
       _logEvent('📷 Starting camera capture...');
       
-      // Request a photo using simple_frame_app
-      await _frameApp!.sendMessage(
-        TxImage(
-          msgCode: 0x0d, // Take photo command
-          qualityIndex: 50,
-        ),
-      );
+      // Request a photo using Frame SDK
+      await frame!.sendMessage(0x0d, TxCaptureSettings(
+        qualityIndex: 50,
+      ).pack());
       
       _logEvent('📸 Photo request sent');
     } catch (e) {
@@ -459,7 +459,7 @@ class MainAppState extends State<MainApp> {
   }
 
   Future<void> _testFrameConnection() async {
-    if (_frameApp == null || !_isConnected) {
+    if (frame == null || !_isConnected) {
       _logEvent('❌ Frame not connected');
       return;
     }
@@ -468,15 +468,12 @@ class MainAppState extends State<MainApp> {
       _logEvent('🧪 Testing Frame connection...');
       
       // Test display with text
-      await _frameApp!.sendMessage(
-        TxPlainText(
-          msgCode: 0x0a,
-          text: 'Hello Frame!',
-          x: 50,
-          y: 50,
-          color: 0x00FF00, // Green
-        ),
-      );
+      await frame!.sendMessage(0x0a, TxPlainText(
+        text: 'Hello Frame!',
+        x: 50,
+        y: 50,
+        paletteOffset: 2, // Use green from palette
+      ).pack());
       _logEvent('📺 Display test sent');
       
       // Get battery level (this would require implementing in Frame app)
@@ -1037,5 +1034,22 @@ class MainAppState extends State<MainApp> {
         );
       }
     });
+  }
+
+  // Required methods for SimpleFrameAppState mixin
+  @override
+  Future<void> run() async {
+    _logEvent('🏃 Starting Frame app run');
+    currentState = ApplicationState.running;
+    if (mounted) setState(() {});
+    // The actual running logic is handled by the session management
+  }
+
+  @override
+  Future<void> cancel() async {
+    _logEvent('⏹️ Canceling Frame app');
+    await _stopSession();
+    currentState = ApplicationState.ready;
+    if (mounted) setState(() {});
   }
 }

@@ -21,6 +21,9 @@ dependencies:
   
   # Simple Frame app (updated for better compatibility) - MINOR UPDATE
   simple_frame_app: ^7.1.0
+  
+  # Frame Bluetooth Low Energy support
+  frame_ble: ^3.0.0
 
   # ═══════════════════════════════════════════════════════════════════════════
   # BLUETOOTH & CONNECTIVITY (Your existing versions work fine)
