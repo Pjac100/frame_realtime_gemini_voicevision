@@ -65,33 +65,38 @@ class FrameGeminiRealtimeIntegration {
        _vectorDb = vectorDb,
        _logger = logger;
 
-  /// Initialize the integration service
+  /// Simplified integration initialization
   Future<bool> initialize() async {
     try {
-      _logger('🔧 Initializing Frame-Gemini realtime integration...');
+      _logger('🔧 Initializing Frame-Gemini integration (simplified)...');
       
-      // Initialize PCM audio player
+      // Initialize PCM audio player with basic error handling
       try {
         await FlutterPcmSound.setup(
           sampleRate: 24000, // Gemini responses are 24kHz
           channelCount: 1,   // Mono audio
         );
-        FlutterPcmSound.setFeedThreshold(1000); // Buffer threshold
-        await FlutterPcmSound.setLogLevel(LogLevel.standard);
+        FlutterPcmSound.setFeedThreshold(500); // Smaller threshold for responsiveness
         _isAudioSetup = true;
-        _logger('✅ Audio player initialized');
+        _logger('✅ Audio player ready');
       } catch (e) {
-        _logger('⚠️ Audio player init warning: $e');
+        _logger('⚠️ Audio player setup warning: $e');
+        // Continue without audio player if needed
       }
       
       // Subscribe to Frame audio service logs
-      _frameLogSubscription = _frameAudioService.logStream.listen(_logger);
+      try {
+        _frameLogSubscription = _frameAudioService.logStream.listen(_logger);
+      } catch (e) {
+        _logger('⚠️ Log subscription warning: $e');
+      }
       
-      _logger('✅ Frame-Gemini integration initialized');
+      _logger('✅ Frame-Gemini integration ready');
       return true;
+      
     } catch (e) {
       _logger('❌ Integration initialization failed: $e');
-      return false;
+      return false; // Don't throw, allow app to continue
     }
   }
 

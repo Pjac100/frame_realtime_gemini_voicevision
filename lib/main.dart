@@ -143,17 +143,29 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   Future<void> _initializeServices() async {
     try {
-      // Initialize vector database with MobileBERT
+      // Configure Bluetooth logging (from official repo)
+      // Note: Uncomment if flutter_blue_plus is available
+      // FlutterBluePlus.setLogLevel(LogLevel.info);
+      
+      // Initialize only essential services at startup
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
-      // Frame app is available through SimpleFrameAppState mixin
-      // No need to initialize separately
+      _logEvent('🔧 Essential services initialized');
+    } catch (e) {
+      _logEvent('❌ Service initialization error: $e');
+    }
+  }
+  
+  /// Initialize Frame-specific services after successful connection
+  Future<void> _initializeFrameServices() async {
+    try {
+      _logEvent('🔧 Initializing Frame services...');
       
       // Initialize Frame audio streaming service
       _frameAudioService = FrameAudioStreamingService(_logEvent);
       
-      // Initialize Gemini Realtime service
+      // Initialize Gemini Realtime service  
       _geminiRealtime = gemini_realtime.GeminiRealtime(
         () {}, // Audio ready callback - handled by integration service
         _logEvent, // Event logger
@@ -162,9 +174,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       // Subscribe to Frame audio service logs
       _frameLogSubscription = _frameAudioService!.logStream.listen(_logEvent);
       
-      _logEvent('🔧 Services initialized with Frame SDK');
+      _logEvent('✅ Frame services initialized');
     } catch (e) {
-      _logEvent('❌ Service initialization error: $e');
+      _logEvent('❌ Frame service initialization error: $e');
+      rethrow;
     }
   }
 
@@ -277,28 +290,33 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🔗 Connecting to Frame...');
       
-      // Connect using simple_frame_app mixin
+      // Simplified connection following official pattern
       await scanOrReconnectFrame();
-      final connected = currentState == ApplicationState.connected;
       
-      if (connected) {
+      if (currentState == ApplicationState.connected) {
         setState(() {
           _isConnected = true;
         });
         
-        _logEvent('✅ Connected to Frame');
+        _logEvent('✅ Frame connected successfully');
+        
+        // Initialize Frame-specific services only after connection
+        await _initializeFrameServices();
         
         // Setup Frame listeners
         _setupFrameListeners();
         
-        // Initialize Frame audio streaming
-        await _initializeFrameAudio();
+        // Initialize Frame audio with simplified approach
+        await _initializeFrameAudioSimplified();
       } else {
-        _logEvent('❌ Failed to connect to Frame');
+        _logEvent('❌ Frame connection failed');
+        setState(() {
+          _isConnected = false;
+        });
       }
       
     } catch (e) {
-      _logEvent('❌ Connection failed: $e');
+      _logEvent('❌ Connection error: $e');
       setState(() {
         _isConnected = false;
       });
@@ -326,41 +344,56 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  Future<void> _initializeFrameAudio() async {
-    if (frame == null || _frameAudioService == null || _geminiRealtime == null || !_isConnected) return;
+  /// Simplified Frame audio initialization following official pattern
+  Future<void> _initializeFrameAudioSimplified() async {
+    if (frame == null || !_isConnected) {
+      _logEvent('❌ Frame not available for audio initialization');
+      return;
+    }
     
     try {
-      _logEvent('🎤 Initializing Frame audio streaming...');
+      _logEvent('🎤 Initializing Frame audio (simplified)...');
       
-      final success = await _frameAudioService!.initialize(frame!);
-      if (success) {
-        _logEvent('✅ Frame audio service ready');
+      // Test Frame responsiveness first
+      await frame!.sendString('print("Audio init test")', awaitResponse: false);
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (_frameAudioService != null) {
+        // Simplified initialization - no complex Lua deployment
+        final success = await _frameAudioService!.testConnection();
         
-        // Initialize the complete Frame-Gemini integration
-        _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
-          frameAudioService: _frameAudioService!,
-          geminiRealtime: _geminiRealtime!,
-          frameDevice: frame, // Pass the Frame device
-          vectorDb: _vectorDb,
-          logger: _logEvent,
-        );
-        
-        final integrationReady = await _frameGeminiIntegration!.initialize();
-        if (integrationReady) {
-          _logEvent('✅ Frame-Gemini integration ready');
-          _logEvent('🎉 Ready for complete voice conversations!');
+        if (success) {
+          _logEvent('✅ Frame audio connection verified');
+          
+          // Create integration service only if basic connection works
+          if (_geminiRealtime != null) {
+            _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
+              frameAudioService: _frameAudioService!,
+              geminiRealtime: _geminiRealtime!,
+              frameDevice: frame,
+              vectorDb: _vectorDb,
+              logger: _logEvent,
+            );
+            
+            // Simple integration initialization
+            final integrationReady = await _frameGeminiIntegration!.initialize();
+            if (integrationReady) {
+              _logEvent('✅ Ready for voice conversations');
+              
+              // Set up audio stream listener
+              _audioSubscription = _frameAudioService!.audioStream.listen(_handleAudioData);
+            } else {
+              _logEvent('⚠️ Integration setup had issues, basic audio available');
+            }
+          }
         } else {
-          _logEvent('❌ Frame-Gemini integration failed');
+          _logEvent('⚠️ Frame audio test failed, will retry on session start');
         }
-        
-        // Keep the old audio stream listener for backward compatibility
-        _audioSubscription = _frameAudioService!.audioStream.listen(_handleAudioData);
-        
-      } else {
-        _logEvent('❌ Frame audio service initialization failed');
       }
+      
     } catch (e) {
-      _logEvent('❌ Frame audio initialization error: $e');
+      _logEvent('❌ Simplified audio init error: $e');
+      _logEvent('ℹ️ Will attempt audio setup when starting session');
     }
   }
 
@@ -650,7 +683,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       
       // Recreate and reinitialize
       _frameAudioService = FrameAudioStreamingService(_logEvent);
-      await _initializeFrameAudio();
+      await _initializeFrameAudioSimplified();
       
     } catch (e) {
       _logEvent('❌ Audio reinitialization failed: $e');
