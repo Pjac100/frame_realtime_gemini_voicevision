@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:frame_realtime_gemini_voicevision/utils/tensor_utils.dart';
@@ -140,7 +140,7 @@ void main() {
       try {
         final ByteData modelData = await rootBundle.load(modelAssetPath);
         expect(modelData.lengthInBytes, greaterThan(1000000)); // Should be several MB
-        print('✅ Model file size: ${(modelData.lengthInBytes / 1024 / 1024).toStringAsFixed(1)} MB');
+        debugPrint('✅ Model file size: ${(modelData.lengthInBytes / 1024 / 1024).toStringAsFixed(1)} MB');
       } catch (e) {
         fail('Model file not accessible: $e');
       }
@@ -150,7 +150,7 @@ void main() {
         final String vocabContent = await rootBundle.loadString(vocabAssetPath);
         final lines = vocabContent.split('\n').where((line) => line.trim().isNotEmpty).toList();
         expect(lines.length, greaterThan(30000)); // MobileBERT vocab should be ~30k tokens
-        print('✅ Vocabulary size: ${lines.length} tokens');
+        debugPrint('✅ Vocabulary size: ${lines.length} tokens');
       } catch (e) {
         fail('Vocabulary file not accessible: $e');
       }
@@ -158,17 +158,17 @@ void main() {
     
     test('Model tensor dimensions match MobileBERT specifications', () async {
       if (interpreter == null) {
-        print('⚠️ Skipping tensor test - model not loaded');
+        debugPrint('⚠️ Skipping tensor test - model not loaded');
         return;
       }
       
       final inputTensors = interpreter!.getInputTensors();
       final outputTensors = interpreter!.getOutputTensors();
       
-      print('📊 Input tensors:');
+      debugPrint('📊 Input tensors:');
       for (int i = 0; i < inputTensors.length; i++) {
         final tensor = inputTensors[i];
-        print('  Input $i: shape=${tensor.shape}, type=${tensor.type}');
+        debugPrint('  Input $i: shape=${tensor.shape}, type=${tensor.type}');
         
         // Expected MobileBERT inputs: [batch_size, seq_length] for input_ids, attention_mask, token_type_ids
         if (tensor.shape.length == 2) {
@@ -177,10 +177,10 @@ void main() {
         }
       }
       
-      print('📊 Output tensors:');
+      debugPrint('📊 Output tensors:');
       for (int i = 0; i < outputTensors.length; i++) {
         final tensor = outputTensors[i];
-        print('  Output $i: shape=${tensor.shape}, type=${tensor.type}');
+        debugPrint('  Output $i: shape=${tensor.shape}, type=${tensor.type}');
         
         // Expected MobileBERT output: [batch_size, embedding_size]
         if (tensor.shape.length == 2) {
@@ -198,7 +198,7 @@ void main() {
     
     test('Vocabulary contains BERT special tokens', () async {
       if (vocab == null) {
-        print('⚠️ Skipping vocabulary test - vocab not loaded');
+        debugPrint('⚠️ Skipping vocabulary test - vocab not loaded');
         return;
       }
       
@@ -207,7 +207,7 @@ void main() {
       for (final token in requiredTokens) {
         expect(vocab!.containsKey(token), true,
             reason: 'Vocabulary should contain $token token');
-        print('✅ Found $token at index ${vocab![token]}');
+        debugPrint('✅ Found $token at index ${vocab![token]}');
       }
       
       // Check vocabulary size is reasonable for BERT
@@ -219,7 +219,7 @@ void main() {
     
     test('Text tokenization produces valid token sequences', () async {
       if (vocab == null) {
-        print('⚠️ Skipping tokenization test - vocab not loaded');
+        debugPrint('⚠️ Skipping tokenization test - vocab not loaded');
         return;
       }
       
@@ -253,7 +253,7 @@ void main() {
               reason: 'Token indices should be within vocabulary size');
         }
         
-        print('✅ Tokenized "$text" -> ${tokens.take(10).join(", ")}...');
+        debugPrint('✅ Tokenized "$text" -> ${tokens.take(10).join(", ")}...');
       }
     });
     
@@ -283,12 +283,12 @@ void main() {
       final shape = TensorUtils.getTensorShape([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]);
       expect(shape, equals('[2, 2, 2]'));
       
-      print('✅ TensorUtils functions working correctly');
+      debugPrint('✅ TensorUtils functions working correctly');
     });
     
     test('MobileBERT embedding generation (if model loads)', () async {
       if (interpreter == null || vocab == null) {
-        print('⚠️ Skipping embedding test - model or vocab not loaded');
+        debugPrint('⚠️ Skipping embedding test - model or vocab not loaded');
         return;
       }
       
@@ -336,20 +336,20 @@ void main() {
         expect(allValuesInRange, true,
             reason: 'Embedding values should be in reasonable range');
         
-        print('✅ Generated ${embedding.length}D embedding');
-        print('  Sample values: [${embedding.take(5).map((v) => v.toStringAsFixed(4)).join(", ")}...]');
+        debugPrint('✅ Generated ${embedding.length}D embedding');
+        debugPrint('  Sample values: [${embedding.take(5).map((v) => v.toStringAsFixed(4)).join(", ")}...]');
         
-        // Calculate and print embedding statistics
+        // Calculate and debugPrint embedding statistics
         final mean = embedding.fold(0.0, (sum, val) => sum + val) / embedding.length;
         final variance = embedding.fold(0.0, (sum, val) => sum + (val - mean) * (val - mean)) / embedding.length;
         final norm = embedding.fold(0.0, (sum, val) => sum + val * val);
         
-        print('  Statistics: mean=${mean.toStringAsFixed(4)}, variance=${variance.toStringAsFixed(4)}, norm=${norm.toStringAsFixed(4)}');
+        debugPrint('  Statistics: mean=${mean.toStringAsFixed(4)}, variance=${variance.toStringAsFixed(4)}, norm=${norm.toStringAsFixed(4)}');
         
       } catch (e) {
-        print('❌ Embedding generation failed: $e');
+        debugPrint('❌ Embedding generation failed: $e');
         // Don't fail the test if inference fails - this might be due to environment constraints
-        print('⚠️ This may be due to platform constraints in test environment');
+        debugPrint('⚠️ This may be due to platform constraints in test environment');
       }
     });
   });

@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
-import 'package:objectbox/objectbox.dart';
 import 'dart:io';
 
 void main() {
