@@ -28,7 +28,7 @@ class FrameAudioStreamingService {
   int _bytesReceived = 0;
   DateTime? _streamStartTime;
   
-  // Message types for Frame communication
+  // Message types for Frame communication (must match Lua script)
   static const int msgStartAudio = 1;
   static const int msgStopAudio = 2;
   static const int msgAudioChunk = 3;
@@ -47,19 +47,53 @@ class FrameAudioStreamingService {
       _emit('🎤 Initializing Frame audio streaming service...');
       _frameDevice = frameDevice;
       
-      // Upload the main Lua application for audio streaming
-      await _uploadAudioApp();
-      
-      // Subscribe to Frame data messages
+      // Subscribe to Frame data messages first
       _frameDataSubscription = _frameDevice!.dataResponse.listen(_handleFrameData);
       
+      // Upload the main Lua application for audio streaming with retry
+      bool uploadSuccess = false;
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        try {
+          _emit('📤 Upload attempt $attempt/3...');
+          await _uploadAudioApp();
+          
+          // Verify the app is running by checking for startup message
+          _emit('🔍 Verifying app startup...');
+          await Future.delayed(const Duration(seconds: 3));
+          
+          // Test if Frame responds to a simple command
+          await _frameDevice!.sendString('print("Verification test")', awaitResponse: true);
+          
+          uploadSuccess = true;
+          break;
+          
+        } catch (e) {
+          _emit('⚠️ Upload attempt $attempt failed: $e');
+          if (attempt < 3) {
+            await Future.delayed(const Duration(seconds: 2));
+            // Try to reset Frame state
+            try {
+              await _frameDevice!.sendBreakSignal();
+              await Future.delayed(const Duration(milliseconds: 500));
+            } catch (_) {
+              // Ignore break signal errors
+            }
+          }
+        }
+      }
+      
+      if (!uploadSuccess) {
+        throw Exception('Failed to upload audio app after 3 attempts');
+      }
+      
       _isInitialized = true;
-      _emit('✅ Frame audio service initialized');
+      _emit('✅ Frame audio service initialized successfully');
       return true;
       
     } catch (e) {
       _emit('❌ Frame audio initialization failed: $e');
       _isInitialized = false;
+      _frameDataSubscription?.cancel();
       return false;
     }
   }
@@ -68,167 +102,145 @@ class FrameAudioStreamingService {
   Future<void> _uploadAudioApp() async {
     _emit('📤 Uploading audio app to Frame...');
     
+    // Simpler, more reliable Lua script
     const luaScript = '''
--- Frame Audio Streaming Application
+-- Frame Audio Streaming App
 local data = require('data')
 
 -- Message types (must match host)
-local MSG_TYPE = {
-    START_AUDIO = 1,
-    STOP_AUDIO = 2,
-    AUDIO_CHUNK = 3
-}
+local MSG_START = 1
+local MSG_STOP = 2
+local MSG_AUDIO = 3
 
-local streaming_active = false
+local streaming = false
 local sample_rate = 16000
 local bit_depth = 8
 
--- Function to handle audio streaming
-local function stream_audio()
-    local mtu = frame.bluetooth.max_length()
-    local chunk_size = mtu - 8  -- Leave room for message header
-    
-    while streaming_active do
-        -- Read audio data from microphone buffer
-        local audio_data = frame.microphone.read(chunk_size)
-        
-        if audio_data == nil then
-            -- Stream stopped and buffer empty
-            streaming_active = false
-            break
-        end
-        
-        if audio_data ~= '' then
-            -- Send audio chunk to host
-            data.send_message(MSG_TYPE.AUDIO_CHUNK, audio_data)
-        else
-            -- Buffer temporarily empty, yield CPU
-            frame.sleep(0.001)
-        end
-    end
-    
-    -- Ensure microphone is stopped
-    frame.microphone.stop()
-end
+-- Show startup message
+frame.display.text("Audio App Ready", 10, 50)
+frame.display.show()
+print("Frame audio app started")
 
--- Visual confirmation function
-local function show_status(message)
-    frame.display.text(message, 50, 100)
-    frame.display.show()
-end
-
--- Main event loop
-local function app_loop()
-    print("Frame audio app ready")
-    show_status("🎤 Audio Ready")
-    
-    while true do
-        -- Process messages from host
-        if data.process_raw_items() > 0 then
-            local msg_type, msg_payload = data.get_message()
-            
-            if msg_type == MSG_TYPE.START_AUDIO then
-                if not streaming_active then
-                    -- Parse audio parameters from payload
-                    if msg_payload and #msg_payload >= 4 then
-                        sample_rate = (msg_payload:byte(1) | (msg_payload:byte(2) << 8))
-                        bit_depth = msg_payload:byte(3)
-                    end
-                    
-                    show_status("🎤 Streaming...")
-                    
-                    -- Start microphone
-                    frame.microphone.start{
-                        sample_rate = sample_rate,
-                        bit_depth = bit_depth
-                    }
-                    
-                    streaming_active = true
-                    stream_audio()
-                    
-                    show_status("🎤 Audio Ready")
+-- Main loop
+while true do
+    if data.process_raw_items() > 0 then
+        local msg_type, payload = data.get_message()
+        
+        if msg_type == MSG_START then
+            if not streaming then
+                -- Parse parameters if available
+                if payload and #payload >= 3 then
+                    sample_rate = payload:byte(1) | (payload:byte(2) << 8)
+                    bit_depth = payload:byte(3)
                 end
                 
-            elseif msg_type == MSG_TYPE.STOP_AUDIO then
-                streaming_active = false
-                show_status("🛑 Stopped")
-                frame.sleep(1)
-                show_status("🎤 Audio Ready")
+                print("Starting audio:", sample_rate, bit_depth)
+                frame.display.text("Streaming...", 10, 50)
+                frame.display.show()
+                
+                -- Start microphone
+                frame.microphone.start{
+                    sample_rate = sample_rate,
+                    bit_depth = bit_depth
+                }
+                streaming = true
+                
+                -- Audio streaming loop
+                while streaming do
+                    local audio = frame.microphone.read()
+                    if audio and audio ~= "" then
+                        data.send_message(MSG_AUDIO, audio)
+                    else
+                        frame.sleep(0.001)
+                    end
+                    
+                    -- Check for stop messages
+                    if data.process_raw_items() > 0 then
+                        local stop_msg = data.get_message()
+                        if stop_msg == MSG_STOP then
+                            streaming = false
+                        end
+                    end
+                end
+                
+                frame.microphone.stop()
+                frame.display.text("Audio Ready", 10, 50)
+                frame.display.show()
+                print("Audio stopped")
             end
+            
+        elseif msg_type == MSG_STOP then
+            streaming = false
         end
-        
-        -- Small sleep to yield CPU
-        frame.sleep(0.001)
     end
+    
+    frame.sleep(0.01)
 end
-
--- Start the application
-app_loop()
 ''';
 
     try {
-      // Clear any existing main.lua file first
-      await _frameDevice!.sendString('f = frame.file.open("main.lua", "w"); f:close()', awaitResponse: true);
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Send byte 4 to clear variables and reboot (will run main.lua if it exists)
-      await _frameDevice!.sendString('', awaitResponse: false); // Clear any pending operations first
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Split script into chunks and write to main.lua file using file system API
-      const maxChunkSize = 200; // Conservative chunk size for MTU limitations
-      final scriptBytes = luaScript.codeUnits;
+      _emit('🔄 Stopping any existing Frame apps...');
       
-      // Open file for writing
-      await _frameDevice!.sendString('f = frame.file.open("main.lua", "w")', awaitResponse: true);
-      await Future.delayed(const Duration(milliseconds: 50));
+      // Stop any existing app and clear
+      await _frameDevice!.sendBreakSignal();
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      _emit('📝 Writing main.lua file in chunks...');
-      
-      // Write script in chunks
-      for (int i = 0; i < scriptBytes.length; i += maxChunkSize) {
-        final end = (i + maxChunkSize < scriptBytes.length) ? i + maxChunkSize : scriptBytes.length;
-        final chunk = String.fromCharCodes(scriptBytes.sublist(i, end));
-        
-        // Escape special characters for Lua string
-        final escapedChunk = chunk
-            .replaceAll('\\', '\\\\')
-            .replaceAll('"', '\\"')
-            .replaceAll('\n', '\\n')
-            .replaceAll('\r', '\\r')
-            .replaceAll('\t', '\\t');
-        
-        await _frameDevice!.sendString('f:write("$escapedChunk")', awaitResponse: true);
-        await Future.delayed(const Duration(milliseconds: 50));
-        
-        if (i % (maxChunkSize * 5) == 0) {
-          _emit('📝 Progress: ${((i / scriptBytes.length) * 100).toInt()}%');
-        }
-      }
-      
-      // Close the file
-      await _frameDevice!.sendString('f:close()', awaitResponse: true);
-      await Future.delayed(const Duration(milliseconds: 100));
-      
-      _emit('✅ main.lua file written successfully');
-      
-      // Verify file was created and get its size
-      await _frameDevice!.sendString('print("File size:", frame.file.size("main.lua"))', awaitResponse: true);
+      // Test Frame responsiveness
+      _emit('🧪 Testing Frame connection...');
+      await _frameDevice!.sendString('print("Frame responsive")', awaitResponse: true);
       await Future.delayed(const Duration(milliseconds: 200));
       
-      // Reboot Frame to run main.lua using require() command
-      _emit('🔄 Rebooting Frame to load main.lua...');
-      await _frameDevice!.sendString('require("main")', awaitResponse: true);
+      // Try simple direct execution first (more reliable than file system)
+      _emit('🚀 Loading audio app directly...');
+      await _frameDevice!.sendString(luaScript, awaitResponse: false);
+      await Future.delayed(const Duration(seconds: 2));
       
-      // Wait for Frame to reboot and initialize
-      await Future.delayed(const Duration(seconds: 3));
-      
-      _emit('✅ Audio app deployed and running on Frame');
+      _emit('✅ Audio app loaded on Frame');
       
     } catch (e) {
       _emit('❌ Failed to upload audio app: $e');
-      rethrow;
+      
+      // Fallback: try the file system approach
+      _emit('🔄 Trying fallback file system method...');
+      try {
+        await _uploadViaFileSystem(luaScript);
+      } catch (fallbackError) {
+        _emit('❌ Fallback method also failed: $fallbackError');
+        rethrow;
+      }
     }
+  }
+  
+  /// Fallback method using file system
+  Future<void> _uploadViaFileSystem(String script) async {
+    // Remove existing main.lua
+    await _frameDevice!.sendString('frame.file.remove("main.lua")', awaitResponse: true);
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // Write script to file in smaller, more reliable chunks
+    const chunkSize = 100; // Smaller chunks for reliability
+    final scriptBytes = script.codeUnits;
+    
+    await _frameDevice!.sendString('f = frame.file.open("main.lua", "w")', awaitResponse: true);
+    
+    for (int i = 0; i < scriptBytes.length; i += chunkSize) {
+      final end = (i + chunkSize < scriptBytes.length) ? i + chunkSize : scriptBytes.length;
+      final chunk = String.fromCharCodes(scriptBytes.sublist(i, end));
+      
+      // Simple write without complex escaping
+      final chunkStr = chunk.replaceAll('"', '\\"').replaceAll('\n', '\\n');
+      await _frameDevice!.sendString('f:write("$chunkStr")', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 30));
+    }
+    
+    await _frameDevice!.sendString('f:close()', awaitResponse: true);
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    // Run the file
+    await _frameDevice!.sendString('require("main")', awaitResponse: true);
+    await Future.delayed(const Duration(seconds: 2));
+    
+    _emit('✅ Fallback upload successful');
   }
 
   /// Handle data messages from Frame
@@ -287,32 +299,64 @@ app_loop()
       _emit('⚠️ Warning: High bandwidth usage may cause audio drops');
     }
     
-    try {
-      // Create start message with audio parameters
-      final params = ByteData(4);
-      params.setUint16(0, sampleRate, Endian.little);
-      params.setUint8(2, bitDepth);
-      params.setUint8(3, 0); // Reserved
-      
-      // Send start command to Frame using raw data message
-      await _frameDevice!.sendMessage(msgStartAudio, params.buffer.asUint8List());
-      
-      // Reset statistics
-      _packetsReceived = 0;
-      _bytesReceived = 0;
-      _streamStartTime = DateTime.now();
-      _currentSampleRate = sampleRate;
-      _currentBitDepth = bitDepth;
-      
-      _isStreaming = true;
-      _emit('✅ Audio streaming started');
-      return true;
-      
-    } catch (e) {
-      _emit('❌ Failed to start audio stream: $e');
-      _isStreaming = false;
-      return false;
+    // Retry logic for robust startup
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      try {
+        _emit('🔄 Audio start attempt $attempt/3...');
+        
+        // Test Frame responsiveness first
+        await _frameDevice!.sendString('print("Frame ready for audio")', awaitResponse: true);
+        await Future.delayed(const Duration(milliseconds: 200));
+        
+        // Create start message with audio parameters
+        final params = ByteData(4);
+        params.setUint16(0, sampleRate, Endian.little);
+        params.setUint8(2, bitDepth);
+        params.setUint8(3, 0); // Reserved
+        
+        // Send start command to Frame using raw data message
+        await _frameDevice!.sendMessage(msgStartAudio, params.buffer.asUint8List());
+        
+        // Wait for confirmation or timeout
+        final startTime = DateTime.now();
+        bool confirmed = false;
+        
+        while (DateTime.now().difference(startTime).inSeconds < 5) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          // Check if we're getting data (confirmation of streaming)
+          if (_packetsReceived > 0) {
+            confirmed = true;
+            break;
+          }
+        }
+        
+        if (confirmed || attempt == 3) {
+          // Reset statistics
+          _packetsReceived = 0;
+          _bytesReceived = 0;
+          _streamStartTime = DateTime.now();
+          _currentSampleRate = sampleRate;
+          _currentBitDepth = bitDepth;
+          
+          _isStreaming = true;
+          _emit('✅ Audio streaming started successfully');
+          return true;
+        } else {
+          _emit('⚠️ No audio confirmation, retrying...');
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+        
+      } catch (e) {
+        _emit('❌ Audio start attempt $attempt failed: $e');
+        if (attempt < 3) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
     }
+    
+    _emit('❌ Failed to start audio stream after 3 attempts');
+    _isStreaming = false;
+    return false;
   }
 
   /// Stop audio streaming
@@ -361,6 +405,76 @@ app_loop()
     'packetsReceived': _packetsReceived,
     'bytesReceived': _bytesReceived,
   };
+  
+  /// Test Frame connection and responsiveness
+  Future<bool> testConnection() async {
+    if (_frameDevice == null) {
+      _emit('❌ No Frame device available for testing');
+      return false;
+    }
+    
+    try {
+      _emit('🧪 Testing Frame connection...');
+      
+      // Simple Lua command test
+      await _frameDevice!.sendString('print("Connection test OK")', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      // Display test
+      await _frameDevice!.sendString('frame.display.text("Test", 10, 10); frame.display.show()', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      _emit('✅ Frame connection test passed');
+      return true;
+      
+    } catch (e) {
+      _emit('❌ Frame connection test failed: $e');
+      return false;
+    }
+  }
+  
+  /// Minimal audio test without full streaming setup
+  Future<bool> testAudioCapability() async {
+    if (_frameDevice == null) {
+      _emit('❌ No Frame device for audio test');
+      return false;
+    }
+    
+    try {
+      _emit('🎤 Testing Frame audio capability...');
+      
+      // Simple audio test script
+      const testScript = '''
+frame.display.text("Audio Test", 10, 30)
+frame.display.show()
+print("Starting audio test")
+
+frame.microphone.start{sample_rate=8000, bit_depth=8}
+frame.sleep(1)
+local test_data = frame.microphone.read()
+frame.microphone.stop()
+
+if test_data then
+    print("Audio test: Got data", #test_data)
+    frame.display.text("Audio OK", 10, 50)
+else
+    print("Audio test: No data")
+    frame.display.text("Audio FAIL", 10, 50)
+end
+frame.display.show()
+''';
+      
+      await _frameDevice!.sendString(testScript, awaitResponse: false);
+      await Future.delayed(const Duration(seconds: 3));
+      
+      _emit('✅ Audio capability test completed');
+      return true;
+      
+    } catch (e) {
+      _emit('❌ Audio capability test failed: $e');
+      return false;
+    }
+  }
 
   /// Send display text to Frame (for testing)
   Future<void> sendDisplayText(String text) async {

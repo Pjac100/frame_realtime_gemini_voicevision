@@ -585,20 +585,75 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🧪 Testing Frame connection...');
       
-      // Test display with text
-      await frame!.sendMessage(0x0a, TxPlainText(
-        text: 'Hello Frame!',
-        x: 50,
-        y: 50,
-        paletteOffset: 2, // Use green from palette
-      ).pack());
-      _logEvent('📺 Display test sent');
-      
-      // Get battery level (this would require implementing in Frame app)
-      _logEvent('📱 Frame connected and responsive');
+      // Test Frame audio service connection if available
+      if (_frameAudioService != null) {
+        final connectionOk = await _frameAudioService!.testConnection();
+        if (connectionOk) {
+          _logEvent('✅ Frame connection test passed');
+        } else {
+          _logEvent('⚠️ Frame connection test had issues');
+        }
+      } else {
+        // Fallback basic test
+        await frame!.sendMessage(0x0a, TxPlainText(
+          text: 'Hello Frame!',
+          x: 50,
+          y: 50,
+          paletteOffset: 2,
+        ).pack());
+        _logEvent('📺 Basic Frame test completed');
+      }
       
     } catch (e) {
       _logEvent('❌ Frame test failed: $e');
+    }
+  }
+  
+  Future<void> _testAudioConnection() async {
+    if (_frameAudioService == null || !_isConnected) {
+      _logEvent('❌ Audio service not available');
+      return;
+    }
+    
+    try {
+      _logEvent('🎤 Testing Frame audio capability...');
+      final audioOk = await _frameAudioService!.testAudioCapability();
+      
+      if (audioOk) {
+        _logEvent('✅ Frame audio test completed - check Frame display');
+      } else {
+        _logEvent('❌ Frame audio test failed');
+      }
+      
+    } catch (e) {
+      _logEvent('❌ Audio test error: $e');
+    }
+  }
+  
+  Future<void> _reinitializeAudio() async {
+    if (!_isConnected || frame == null) {
+      _logEvent('❌ Frame not connected');
+      return;
+    }
+    
+    try {
+      _logEvent('🔄 Reinitializing Frame audio service...');
+      
+      // Stop current session if active
+      if (_isSessionActive) {
+        await _stopSession();
+      }
+      
+      // Dispose current audio service
+      _frameAudioService?.dispose();
+      _frameGeminiIntegration?.dispose();
+      
+      // Recreate and reinitialize
+      _frameAudioService = FrameAudioStreamingService(_logEvent);
+      await _initializeFrameAudio();
+      
+    } catch (e) {
+      _logEvent('❌ Audio reinitialization failed: $e');
     }
   }
 
@@ -788,11 +843,34 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
+                    onPressed: (_isConnected && _frameAudioService != null) ? _testAudioConnection : null,
+                    icon: const Icon(Icons.mic_external_on),
+                    label: const Text('Test Audio'),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Photo and diagnostic controls
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
                     onPressed: (_isConnected && _isSessionActive && _frameGeminiIntegration != null) 
                         ? () => _frameGeminiIntegration!.captureAndSendPhoto() 
                         : _isConnected ? _startCameraCapture : null,
                     icon: const Icon(Icons.camera),
                     label: Text(_isSessionActive ? 'Capture & Send to AI' : 'Take Photo'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: (_isConnected && _frameAudioService != null) ? _reinitializeAudio : null,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reinit Audio'),
                   ),
                 ),
               ],
