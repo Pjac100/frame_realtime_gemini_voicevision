@@ -85,8 +85,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   String _geminiApiKey = '';
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
   GenerativeModel? _model; // TODO: Will be used for Gemini chat sessions
-  // TODO: Implement ChatSession for actual Gemini conversations once audio STT is integrated
-  // ChatSession? _chatSession;
+  ChatSession? _chatSession;
   
   // Session state
   bool _isSessionActive = false;
@@ -204,12 +203,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         ),
       );
 
-      // _chatSession = _model!.startChat(); // TODO: Implement when needed
+      _chatSession = _model!.startChat();
       _logEvent('🤖 Gemini conversation model initialized');
     } catch (e) {
       _logEvent('❌ Gemini initialization failed: $e');
     }
   }
+
+  /// Get Gemini chat session status for UI display
+  bool get isGeminiReady => _chatSession != null;
 
   Future<void> _saveGeminiApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
@@ -774,19 +776,21 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               },
             ),
             if (_geminiApiKey.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
                 child: Row(
                   children: [
                     Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
+                      isGeminiReady ? Icons.check_circle : Icons.pending,
+                      color: isGeminiReady ? Colors.green : Colors.orange,
                       size: 16,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
-                      'API key configured',
-                      style: TextStyle(color: Colors.green),
+                      isGeminiReady ? 'Gemini ready' : 'Gemini initializing',
+                      style: TextStyle(
+                        color: isGeminiReady ? Colors.green : Colors.orange,
+                      ),
                     ),
                   ],
                 ),
