@@ -13,6 +13,8 @@ import 'dart:io';
 // ObjectBox imports
 import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
 import 'package:frame_realtime_gemini_voicevision/services/frame_audio_streaming_service.dart';
+import 'package:frame_realtime_gemini_voicevision/services/frame_gemini_realtime_integration.dart';
+import 'package:frame_realtime_gemini_voicevision/gemini_realtime.dart' as gemini_realtime;
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
 // Global ObjectBox store instance
@@ -106,6 +108,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Frame audio streaming service
   FrameAudioStreamingService? _frameAudioService;
+  
+  // Complete Frame-Gemini integration service
+  FrameGeminiRealtimeIntegration? _frameGeminiIntegration;
+  gemini_realtime.GeminiRealtime? _geminiRealtime;
+  
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<String>? _frameLogSubscription;
   StreamSubscription<dynamic>? _frameDataSubscription;
@@ -126,6 +133,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _frameLogSubscription?.cancel();
     _frameDataSubscription?.cancel();
     _frameAudioService?.dispose();
+    _frameGeminiIntegration?.dispose();
     if (frame != null) {
       disconnectFrame();
     }
@@ -144,6 +152,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       
       // Initialize Frame audio streaming service
       _frameAudioService = FrameAudioStreamingService(_logEvent);
+      
+      // Initialize Gemini Realtime service
+      _geminiRealtime = gemini_realtime.GeminiRealtime(
+        () {}, // Audio ready callback - handled by integration service
+        _logEvent, // Event logger
+      );
       
       // Subscribe to Frame audio service logs
       _frameLogSubscription = _frameAudioService!.logStream.listen(_logEvent);
@@ -212,6 +226,20 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   /// Get Gemini chat session status for UI display
   bool get isGeminiReady => _chatSession != null;
+
+  /// Map UI voice enum to Gemini Realtime voice enum
+  gemini_realtime.GeminiVoiceName _mapVoiceName(GeminiVoiceName uiVoice) {
+    switch (uiVoice) {
+      case GeminiVoiceName.puck:
+        return gemini_realtime.GeminiVoiceName.Puck;
+      case GeminiVoiceName.charon:
+        return gemini_realtime.GeminiVoiceName.Charon;
+      case GeminiVoiceName.kore:
+        return gemini_realtime.GeminiVoiceName.Kore;
+      case GeminiVoiceName.fenrir:
+        return gemini_realtime.GeminiVoiceName.Fenrir;
+    }
+  }
 
   Future<void> _saveGeminiApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
@@ -283,13 +311,23 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _frameDataSubscription = frame!.dataResponse.listen((data) {
         if (data.isNotEmpty) {
           _logEvent('📦 Frame data received: ${data.length} bytes');
+          
+          // Check if this might be photo data
+          if (data.length > 1000) { // Photos are typically larger
+            try {
+              final photoData = Uint8List.fromList(data);
+              _handlePhotoReceived(photoData);
+            } catch (e) {
+              _logEvent('⚠️ Photo processing error: $e');
+            }
+          }
         }
       });
     }
   }
 
   Future<void> _initializeFrameAudio() async {
-    if (frame == null || _frameAudioService == null || !_isConnected) return;
+    if (frame == null || _frameAudioService == null || _geminiRealtime == null || !_isConnected) return;
     
     try {
       _logEvent('🎤 Initializing Frame audio streaming...');
@@ -298,10 +336,26 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       if (success) {
         _logEvent('✅ Frame audio service ready');
         
-        // Setup audio stream listener
+        // Initialize the complete Frame-Gemini integration
+        _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
+          frameAudioService: _frameAudioService!,
+          geminiRealtime: _geminiRealtime!,
+          frameDevice: frame, // Pass the Frame device
+          vectorDb: _vectorDb,
+          logger: _logEvent,
+        );
+        
+        final integrationReady = await _frameGeminiIntegration!.initialize();
+        if (integrationReady) {
+          _logEvent('✅ Frame-Gemini integration ready');
+          _logEvent('🎉 Ready for complete voice conversations!');
+        } else {
+          _logEvent('❌ Frame-Gemini integration failed');
+        }
+        
+        // Keep the old audio stream listener for backward compatibility
         _audioSubscription = _frameAudioService!.audioStream.listen(_handleAudioData);
         
-        _logEvent('🎉 Ready for voice conversations!');
       } else {
         _logEvent('❌ Frame audio service initialization failed');
       }
@@ -330,7 +384,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       }
     }
     
-    // TODO: Process audio for speech-to-text with Gemini
+    // Audio processing now handled by FrameGeminiRealtimeIntegration service
   }
 
   bool _detectVoiceActivity(Uint8List audioData) {
@@ -377,17 +431,46 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       return;
     }
 
-    setState(() {
-      _isSessionActive = true;
-    });
-
-    _logEvent('🎤 AI session started with Frame audio');
-    
-    // Start audio streaming
-    await _startAudioStreaming();
-    
-    // Start camera capture
-    await _startCameraCapture();
+    try {
+      _logEvent('🚀 Starting complete AI session...');
+      
+      // Use the new integrated service if available
+      if (_frameGeminiIntegration != null) {
+        final success = await _frameGeminiIntegration!.startSession(
+          geminiApiKey: _geminiApiKey,
+          voice: _mapVoiceName(_selectedVoice),
+          systemInstruction: 'You are a helpful AI assistant integrated with Frame smart glasses. '
+                           'You can see what the user sees through their camera and hear their voice. '
+                           'Keep responses concise and conversational. The user is wearing Frame glasses.',
+        );
+        
+        if (success) {
+          setState(() {
+            _isSessionActive = true;
+          });
+          _logEvent('✅ Complete AI session started successfully');
+          
+          // Start camera capture for vision
+          await _startCameraCapture();
+        } else {
+          _logEvent('❌ Failed to start complete AI session');
+        }
+      } else {
+        // Fall back to the old method
+        setState(() {
+          _isSessionActive = true;
+        });
+        _logEvent('🎤 AI session started with Frame audio (fallback mode)');
+        
+        // Start audio streaming
+        await _startAudioStreaming();
+        
+        // Start camera capture
+        await _startCameraCapture();
+      }
+    } catch (e) {
+      _logEvent('❌ Session start error: $e');
+    }
   }
 
   Future<void> _startAudioStreaming() async {
@@ -449,16 +532,42 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
+  /// Handle photo received from Frame and send to integration service
+  void _handlePhotoReceived(Uint8List photoData) {
+    setState(() {
+      _lastPhoto = photoData;
+    });
+    
+    // Send photo to the integration service if active
+    if (_frameGeminiIntegration != null && _isSessionActive) {
+      _frameGeminiIntegration!.sendPhotoToGemini(photoData);
+      _logEvent('📸 Photo sent to AI for analysis');
+    }
+  }
+
   Future<void> _stopSession() async {
     if (!_isSessionActive) return;
 
-    await _stopAudioStreaming();
+    try {
+      // Use the new integrated service if available
+      if (_frameGeminiIntegration != null) {
+        await _frameGeminiIntegration!.stopSession();
+        _logEvent('⏹️ Complete AI session stopped');
+      } else {
+        // Fall back to the old method
+        await _stopAudioStreaming();
+        _logEvent('⏹️ AI session stopped (fallback mode)');
+      }
 
-    setState(() {
-      _isSessionActive = false;
-    });
-
-    _logEvent('⏹️ AI session stopped');
+      setState(() {
+        _isSessionActive = false;
+      });
+    } catch (e) {
+      _logEvent('❌ Session stop error: $e');
+      setState(() {
+        _isSessionActive = false;
+      });
+    }
   }
 
   Future<void> _testFrameConnection() async {
@@ -711,13 +820,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
             
             // Status messages
             if (_isSessionActive)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
-                  '🎤 AI session active with Frame',
+                  _frameGeminiIntegration != null 
+                    ? '🚀 Complete AI session active with Frame' 
+                    : '🎤 AI session active with Frame (basic mode)',
                   style: TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: Colors.blue,
+                    color: _frameGeminiIntegration != null ? Colors.green : Colors.blue,
                   ),
                 ),
               ),
