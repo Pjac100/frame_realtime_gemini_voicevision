@@ -84,8 +84,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // AI Configuration
   String _geminiApiKey = '';
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
-  GenerativeModel? _model;
-  ChatSession? _chatSession; // TODO: Use for actual Gemini conversations once audio STT is integrated
+  GenerativeModel? _model; // TODO: Will be used for Gemini chat sessions
+  // TODO: Implement ChatSession for actual Gemini conversations once audio STT is integrated
+  // ChatSession? _chatSession;
   
   // Session state
   bool _isSessionActive = false;
@@ -203,7 +204,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         ),
       );
 
-      _chatSession = _model!.startChat();
+      // _chatSession = _model!.startChat(); // TODO: Implement when needed
       _logEvent('🤖 Gemini conversation model initialized');
     } catch (e) {
       _logEvent('❌ Gemini initialization failed: $e');

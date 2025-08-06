@@ -18,8 +18,8 @@ class FrameGeminiAudioIntegration {
   
   // Voice activity detection
   bool _isVoiceActive = false;
-  DateTime? _voiceStartTime;
-  DateTime? _voiceEndTime;
+  // DateTime? _voiceStartTime; // TODO: Use for voice timing analytics
+  // DateTime? _voiceEndTime;   // TODO: Use for voice timing analytics
   static const Duration _silenceThreshold = Duration(milliseconds: 500);
   
   Timer? _silenceTimer;
@@ -68,7 +68,7 @@ class FrameGeminiAudioIntegration {
   void _handleVoiceDetected() {
     if (!_isVoiceActive) {
       _isVoiceActive = true;
-      _voiceStartTime = DateTime.now();
+      // _voiceStartTime = DateTime.now(); // TODO: Use for timing analytics
       _logger('🗣️ Voice started');
     }
     
@@ -82,7 +82,7 @@ class FrameGeminiAudioIntegration {
     if (_isVoiceActive && _silenceTimer == null) {
       // Start silence timer
       _silenceTimer = Timer(_silenceThreshold, () {
-        _voiceEndTime = DateTime.now();
+        // _voiceEndTime = DateTime.now(); // TODO: Use for timing analytics
         _isVoiceActive = false;
         _logger('🤫 Voice ended - processing speech');
         
