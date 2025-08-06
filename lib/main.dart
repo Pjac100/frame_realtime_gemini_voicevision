@@ -539,9 +539,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
     
     // Send photo to the integration service if active
-    if (_frameGeminiIntegration != null && _isSessionActive) {
-      _frameGeminiIntegration!.sendPhotoToGemini(photoData);
-      _logEvent('📸 Photo sent to AI for analysis');
+    if (_frameGeminiIntegration != null) {
+      // Update the integration service with the new photo
+      _frameGeminiIntegration!.setLastCapturedPhoto(photoData);
+      
+      if (_isSessionActive) {
+        _logEvent('📸 Photo received and available for AI analysis');
+      } else {
+        _logEvent('📸 Photo received and cached');
+      }
     }
   }
 
@@ -782,9 +788,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isConnected ? _startCameraCapture : null,
+                    onPressed: (_isConnected && _isSessionActive && _frameGeminiIntegration != null) 
+                        ? () => _frameGeminiIntegration!.captureAndSendPhoto() 
+                        : _isConnected ? _startCameraCapture : null,
                     icon: const Icon(Icons.camera),
-                    label: const Text('Take Photo'),
+                    label: Text(_isSessionActive ? 'Capture & Send to AI' : 'Take Photo'),
                   ),
                 ),
               ],

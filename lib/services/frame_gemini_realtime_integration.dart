@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:frame_ble/brilliant_device.dart';
+import 'package:frame_msg/tx/capture_settings.dart';
 import 'frame_audio_streaming_service.dart';
 import '../gemini_realtime.dart' as gemini_realtime;
 import 'vector_db_service.dart';
@@ -42,6 +43,10 @@ class FrameGeminiRealtimeIntegration {
   // Audio playback
   bool _isPlayingAudio = false;
   bool _isAudioSetup = false;
+  
+  // Photo capture
+  Uint8List? _lastCapturedPhoto;
+  bool _isWaitingForPhoto = false;
   
   // Statistics
   int _totalAudioPackets = 0;
@@ -105,6 +110,9 @@ class FrameGeminiRealtimeIntegration {
       _logger('🚀 Starting Frame-Gemini realtime session...');
       _sessionStartTime = DateTime.now();
       
+      // Display connection attempt on Frame
+      await _displayOnFrame('🔗 Connecting to Gemini...');
+      
       // Connect to Gemini Realtime API
       final geminiConnected = await _geminiRealtime.connect(
         geminiApiKey,
@@ -114,8 +122,14 @@ class FrameGeminiRealtimeIntegration {
       
       if (!geminiConnected) {
         _logger('❌ Failed to connect to Gemini Realtime');
+        await _displayOnFrame('❌ Gemini connection failed');
+        await Future.delayed(const Duration(seconds: 2));
         return false;
       }
+      
+      // Visual confirmation of successful Gemini connection
+      await _displayOnFrame('✅ Gemini connected!');
+      await Future.delayed(const Duration(seconds: 1));
       
       // Start Frame audio streaming
       final audioStarted = await _frameAudioService.startStreaming(
@@ -298,6 +312,13 @@ class FrameGeminiRealtimeIntegration {
       _totalResponsesReceived++;
       _logger('🔊 Playing Gemini response');
       
+      // Capture photo when Gemini pipeline engages (first response of the session)
+      if (_totalResponsesReceived == 1) {
+        _logger('📸 First Gemini response - capturing context photo');
+        // Don't await to avoid blocking audio playback
+        captureAndSendPhoto().catchError((e) => _logger('⚠️ Context photo error: $e'));
+      }
+      
       // Display response indicator on Frame
       await _displayOnFrame('🤖 AI responding...');
       
@@ -354,7 +375,110 @@ class FrameGeminiRealtimeIntegration {
     }
   }
 
-  /// Send photo from Frame to Gemini
+  /// Set the last captured photo (called from main app when photo is received)
+  void setLastCapturedPhoto(Uint8List photoData) {
+    _lastCapturedPhoto = photoData;
+    if (_isWaitingForPhoto) {
+      _isWaitingForPhoto = false;
+      _sendLastPhotoToGemini();
+    }
+  }
+  
+  /// Send the last captured photo to Gemini
+  void _sendLastPhotoToGemini() {
+    if (_lastCapturedPhoto != null && _lastCapturedPhoto!.isNotEmpty) {
+      _logger('📸 Sending captured photo to Gemini...');
+      _geminiRealtime.sendPhoto(_lastCapturedPhoto!);
+      
+      // Visual feedback
+      _displayOnFrame('✅ Photo sent!').then((_) {
+        Future.delayed(const Duration(seconds: 2), () {
+          _displayOnFrame('🎤 Listening...');
+        });
+      });
+      
+      // Add photo context to vector DB
+      if (_vectorDb != null) {
+        _vectorDb.addTextWithEmbedding(
+          content: 'User shared a photo through Frame glasses',
+          metadata: {
+            'type': 'photo',
+            'timestamp': DateTime.now().toIso8601String(),
+            'source': 'frame_camera',
+          },
+        );
+      }
+    }
+  }
+
+  /// Capture and send photo from Frame to Gemini with visual feedback
+  Future<void> captureAndSendPhoto() async {
+    if (!_isActive || !_geminiRealtime.isConnected()) {
+      _logger('⚠️ Cannot capture photo - session not active');
+      await _displayOnFrame('⚠️ Session not active');
+      return;
+    }
+    
+    try {
+      _logger('📸 Capturing photo from Frame...');
+      await _displayOnFrame('📸 Capturing photo...');
+      
+      // If we already have a recent photo, send it directly
+      if (_lastCapturedPhoto != null) {
+        _sendLastPhotoToGemini();
+        return;
+      }
+      
+      // Request new photo capture
+      _isWaitingForPhoto = true;
+      await _captureFramePhoto();
+      
+      // Wait briefly for photo to arrive
+      await Future.delayed(const Duration(seconds: 3));
+      
+      if (!_isWaitingForPhoto) {
+        // Photo was received and sent
+        return;
+      }
+      
+      // Timeout - photo didn't arrive
+      _isWaitingForPhoto = false;
+      _logger('❌ Photo capture timeout');
+      await _displayOnFrame('❌ Photo timeout');
+      await Future.delayed(const Duration(seconds: 2));
+      await _displayOnFrame('🎤 Listening...');
+      
+    } catch (e) {
+      _isWaitingForPhoto = false;
+      _logger('❌ Failed to capture/send photo: $e');
+      await _displayOnFrame('❌ Photo error');
+      await Future.delayed(const Duration(seconds: 2));
+      await _displayOnFrame('🎤 Listening...');
+    }
+  }
+  
+  /// Capture photo from Frame camera
+  Future<Uint8List?> _captureFramePhoto() async {
+    try {
+      // Request photo capture from Frame using sendMessage
+      if (_frameDevice != null) {
+        // Use TxCaptureSettings to request a photo
+        await _frameDevice.sendMessage(0x0d, TxCaptureSettings(
+          qualityIndex: 75, // Good quality
+        ).pack());
+        
+        // Note: Photo data will be received via dataResponse stream
+        // The actual photo handling is done in the main app's _handlePhotoReceived method
+        return null; // Photo will be received asynchronously
+      }
+      return null;
+    } catch (e) {
+      _logger('❌ Frame photo capture error: $e');
+      return null;
+    }
+  }
+
+  /// Send photo from Frame to Gemini (legacy method for backwards compatibility)
   Future<void> sendPhotoToGemini(Uint8List jpegPhoto) async {
     if (!_isActive || !_geminiRealtime.isConnected()) {
       _logger('⚠️ Cannot send photo - session not active');

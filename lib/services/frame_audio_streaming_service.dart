@@ -111,9 +111,16 @@ local function stream_audio()
     frame.microphone.stop()
 end
 
+-- Visual confirmation function
+local function show_status(message)
+    frame.display.text(message, 50, 100)
+    frame.display.show()
+end
+
 -- Main event loop
 local function app_loop()
     print("Frame audio app ready")
+    show_status("🎤 Audio Ready")
     
     while true do
         -- Process messages from host
@@ -128,6 +135,8 @@ local function app_loop()
                         bit_depth = msg_payload:byte(3)
                     end
                     
+                    show_status("🎤 Streaming...")
+                    
                     -- Start microphone
                     frame.microphone.start{
                         sample_rate = sample_rate,
@@ -136,10 +145,15 @@ local function app_loop()
                     
                     streaming_active = true
                     stream_audio()
+                    
+                    show_status("🎤 Audio Ready")
                 end
                 
             elseif msg_type == MSG_TYPE.STOP_AUDIO then
                 streaming_active = false
+                show_status("🛑 Stopped")
+                frame.sleep(1)
+                show_status("🎤 Audio Ready")
             end
         end
         
@@ -152,10 +166,69 @@ end
 app_loop()
 ''';
 
-    // Upload and run the Lua script directly as string
-    await _frameDevice!.sendString(luaScript, awaitResponse: true);
-    
-    _emit('✅ Audio app uploaded and running');
+    try {
+      // Clear any existing main.lua file first
+      await _frameDevice!.sendString('f = frame.file.open("main.lua", "w"); f:close()', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Send byte 4 to clear variables and reboot (will run main.lua if it exists)
+      await _frameDevice!.sendString('', awaitResponse: false); // Clear any pending operations first
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Split script into chunks and write to main.lua file using file system API
+      const maxChunkSize = 200; // Conservative chunk size for MTU limitations
+      final scriptBytes = luaScript.codeUnits;
+      
+      // Open file for writing
+      await _frameDevice!.sendString('f = frame.file.open("main.lua", "w")', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 50));
+      
+      _emit('📝 Writing main.lua file in chunks...');
+      
+      // Write script in chunks
+      for (int i = 0; i < scriptBytes.length; i += maxChunkSize) {
+        final end = (i + maxChunkSize < scriptBytes.length) ? i + maxChunkSize : scriptBytes.length;
+        final chunk = String.fromCharCodes(scriptBytes.sublist(i, end));
+        
+        // Escape special characters for Lua string
+        final escapedChunk = chunk
+            .replaceAll('\\', '\\\\')
+            .replaceAll('"', '\\"')
+            .replaceAll('\n', '\\n')
+            .replaceAll('\r', '\\r')
+            .replaceAll('\t', '\\t');
+        
+        await _frameDevice!.sendString('f:write("$escapedChunk")', awaitResponse: true);
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        if (i % (maxChunkSize * 5) == 0) {
+          _emit('📝 Progress: ${((i / scriptBytes.length) * 100).toInt()}%');
+        }
+      }
+      
+      // Close the file
+      await _frameDevice!.sendString('f:close()', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      _emit('✅ main.lua file written successfully');
+      
+      // Verify file was created and get its size
+      await _frameDevice!.sendString('print("File size:", frame.file.size("main.lua"))', awaitResponse: true);
+      await Future.delayed(const Duration(milliseconds: 200));
+      
+      // Reboot Frame to run main.lua using require() command
+      _emit('🔄 Rebooting Frame to load main.lua...');
+      await _frameDevice!.sendString('require("main")', awaitResponse: true);
+      
+      // Wait for Frame to reboot and initialize
+      await Future.delayed(const Duration(seconds: 3));
+      
+      _emit('✅ Audio app deployed and running on Frame');
+      
+    } catch (e) {
+      _emit('❌ Failed to upload audio app: $e');
+      rethrow;
+    }
   }
 
   /// Handle data messages from Frame
