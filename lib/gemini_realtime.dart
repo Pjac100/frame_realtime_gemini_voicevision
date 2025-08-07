@@ -95,10 +95,15 @@ class GeminiRealtime {
       ),
     );
 
-    // connection doesn't complete immediately, wait until it's ready
-    // TODO check what happens if API key is bad, host is bad etc, how long are the timeouts?
-    // and return false if not connected properly (or throw the exception and print the error?)
-    await _channel!.ready;
+    // connection doesn't complete immediately, wait until it's ready with timeout
+    try {
+      await _channel!.ready.timeout(const Duration(seconds: 10));
+    } catch (e) {
+      eventLogger('Gemini connection timeout or error: $e');
+      _log.severe('Connection failed: $e');
+      _connected = false;
+      return false;
+    }
 
     // set up stream handler for channel to handle events
     _channelSubs = _channel!.stream.listen(_handleGeminiEvent);

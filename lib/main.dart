@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
@@ -8,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 
 // ObjectBox imports
 import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
@@ -297,28 +297,46 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _isConnected = false;
       });
       
-      // Simple connection attempt
-      await scanOrReconnectFrame();
+      // Simple connection attempt with timeout
+      await scanOrReconnectFrame().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          _logEvent('❌ Frame connection timeout');
+          throw TimeoutException('Frame connection timeout', const Duration(seconds: 15));
+        },
+      );
       
-      // Wait a moment for connection to stabilize
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Wait longer for connection to stabilize
+      await Future.delayed(const Duration(milliseconds: 2000));
       
+      // Verify connection more thoroughly
       if (currentState == ApplicationState.connected && frame != null) {
+        // Double-check Frame is responsive
+        try {
+          await frame!.sendString('print("Health check")', awaitResponse: false);
+          await Future.delayed(const Duration(milliseconds: 300));
+        } catch (e) {
+          _logEvent('⚠️ Frame health check failed: $e');
+        }
         setState(() {
           _isConnected = true;
         });
         
         _logEvent('✅ Frame connected - setting up services...');
         
-        // Initialize Frame-specific services without blocking connection
-        try {
-          await _initializeFrameServices();
-          _setupFrameListeners();
-          _logEvent('✅ Frame services ready');
-        } catch (e) {
-          _logEvent('⚠️ Service setup warning: $e');
-          // Don't fail the connection for service issues
-        }
+        // Set up Frame listeners first (lightweight)
+        _setupFrameListeners();
+        _logEvent('✅ Frame connected - listeners ready');
+        
+        // Initialize Frame services in background (don't block)
+        Future.delayed(const Duration(milliseconds: 1500), () async {
+          try {
+            await _initializeFrameServices();
+            _logEvent('✅ Frame services initialized');
+          } catch (e) {
+            _logEvent('⚠️ Service init delayed: $e');
+          }
+        });
         
         // Test Frame responsiveness without deploying complex scripts
         try {

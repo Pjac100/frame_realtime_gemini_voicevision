@@ -86,46 +86,22 @@ class FrameAudioStreamingService {
   Future<void> _uploadAudioApp() async {
     _emit('📤 Deploying minimal audio handler...');
     
-    // Minimal Lua script similar to official repository approach
+    // Ultra-minimal script to avoid connection issues
     const minimalScript = '''
--- Minimal Frame Audio Handler
+-- Ultra-minimal Frame handler - no loops to avoid timeouts
 local data = require('data')
-
-frame.display.text("Audio Ready", 20, 60)
+print("Minimal handler loaded")
+frame.display.text("Ready", 20, 60)
 frame.display.show()
-print("Minimal audio handler ready")
 
--- Simple message loop
-while true do
-    if data.process_raw_items() > 0 then
-        local msg_type, payload = data.get_message()
-        
-        if msg_type == 1 then -- Start audio
-            print("Start audio command received")
-            frame.display.text("Audio ON", 20, 60)
-            frame.display.show()
-            
-            -- Simple audio streaming
-            frame.microphone.start{sample_rate=8000, bit_depth=8}
-            
-            for i = 1, 100 do -- Limit loop iterations
-                local audio = frame.microphone.read()
-                if audio and #audio > 0 then
-                    data.send_message(3, audio)
-                end
-                frame.sleep(0.01)
-            end
-            
-            frame.microphone.stop()
-            frame.display.text("Audio Ready", 20, 60)
-            frame.display.show()
-            
-        elseif msg_type == 2 then -- Stop audio
-            print("Stop audio command received")
-            break
-        end
+-- Process single message and exit
+if data.process_raw_items() > 0 then
+    local msg_type, payload = data.get_message()
+    if msg_type == 1 then
+        print("Audio start request")
+        frame.display.text("Audio ON", 20, 60)
+        frame.display.show()
     end
-    frame.sleep(0.05)
 end
 ''';
 

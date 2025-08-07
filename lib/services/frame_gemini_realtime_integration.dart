@@ -136,10 +136,10 @@ class FrameGeminiRealtimeIntegration {
       await _displayOnFrame('✅ Gemini connected!');
       await Future.delayed(const Duration(seconds: 1));
       
-      // Start Frame audio streaming
+      // Start Frame audio streaming with simplified config
       final audioStarted = await _frameAudioService.startStreaming(
-        sampleRate: 16000, // Match Gemini's expected rate
-        bitDepth: 16,      // Match Gemini's expected depth
+        sampleRate: 8000, // Lower rate for stability
+        bitDepth: 8,      // Lower depth for stability  
       );
       
       if (!audioStarted) {
