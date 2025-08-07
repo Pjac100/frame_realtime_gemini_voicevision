@@ -150,18 +150,22 @@ end
     }
   }
 
-  /// Simplified audio streaming startup
-  Future<bool> startStreaming({int sampleRate = 8000, int bitDepth = 8}) async {
+  /// Frame audio streaming with official Brilliant Labs parameters
+  Future<bool> startStreaming({int sampleRate = 8000, int bitDepth = 16}) async {
     if (!_isInitialized || _isStreaming || _frameDevice == null) {
       _emit('⚠️ Cannot start audio - service not ready');
       return false;
     }
     
     try {
-      _emit('🎤 Starting audio stream: ${sampleRate}Hz, $bitDepth-bit');
+      _emit('🎤 Starting Frame audio: ${sampleRate}Hz, $bitDepth-bit (official Brilliant Labs spec)');
       
-      // Simple start command
-      await _frameDevice!.sendMessage(msgStartAudio, Uint8List.fromList([sampleRate & 0xFF, (sampleRate >> 8) & 0xFF, bitDepth]));
+      // Use Frame native audio parameters (8kHz/16-bit as per official repo)
+      await _frameDevice!.sendMessage(msgStartAudio, Uint8List.fromList([
+        sampleRate & 0xFF, 
+        (sampleRate >> 8) & 0xFF, 
+        bitDepth
+      ]));
       
       // Reset statistics
       _packetsReceived = 0;
@@ -171,7 +175,7 @@ end
       _currentBitDepth = bitDepth;
       _isStreaming = true;
       
-      _emit('✅ Audio streaming started');
+      _emit('✅ Frame audio streaming started (8kHz/16-bit PCM)');
       return true;
       
     } catch (e) {
@@ -271,7 +275,7 @@ frame.display.text("Audio Test", 10, 30)
 frame.display.show()
 print("Starting audio test")
 
-frame.microphone.start{sample_rate=8000, bit_depth=8}
+frame.microphone.start{sample_rate=8000, bit_depth=16}
 frame.sleep(1)
 local test_data = frame.microphone.read()
 frame.microphone.stop()

@@ -549,10 +549,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (_frameAudioService == null || _isAudioStreaming || !_isConnected) return;
     
     try {
-      // Use 16kHz/8-bit for better reliability (16 kB/s)
+      // Use Frame native parameters: 8kHz/16-bit (official Brilliant Labs spec)
       final success = await _frameAudioService!.startStreaming(
-        sampleRate: 16000,
-        bitDepth: 8,
+        sampleRate: 8000,  // Frame native sample rate
+        bitDepth: 16,      // Frame native bit depth (16-bit PCM using high 10 bits)
       );
       
       if (success) {
@@ -561,7 +561,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           _audioPacketsReceived = 0;
           _totalAudioBytes = 0;
         });
-        _logEvent('🎤 Audio streaming started (16kHz/8-bit)');
+        _logEvent('🎤 Audio streaming started (8kHz/16-bit PCM)');
       } else {
         _logEvent('❌ Failed to start audio streaming');
       }

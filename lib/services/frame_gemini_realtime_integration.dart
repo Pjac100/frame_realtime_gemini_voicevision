@@ -6,6 +6,7 @@ import 'package:frame_msg/tx/capture_settings.dart';
 import 'frame_audio_streaming_service.dart';
 import '../gemini_realtime.dart' as gemini_realtime;
 import 'vector_db_service.dart';
+import '../audio_upsampler.dart';
 
 /// Complete integration service that bridges Frame hardware with Gemini Realtime API
 /// Provides end-to-end voice conversation with smart glasses
@@ -136,10 +137,10 @@ class FrameGeminiRealtimeIntegration {
       await _displayOnFrame('✅ Gemini connected!');
       await Future.delayed(const Duration(seconds: 1));
       
-      // Start Frame audio streaming with simplified config
+      // Start Frame audio streaming with official Brilliant Labs parameters
       final audioStarted = await _frameAudioService.startStreaming(
-        sampleRate: 8000, // Lower rate for stability
-        bitDepth: 8,      // Lower depth for stability  
+        sampleRate: 8000, // Frame native sample rate (official spec)
+        bitDepth: 16,     // Frame native bit depth (16-bit PCM, using high 10 bits)
       );
       
       if (!audioStarted) {
@@ -216,10 +217,16 @@ class FrameGeminiRealtimeIntegration {
   }
 
   /// Convert Frame audio to Gemini Realtime format
+  /// Frame outputs 8kHz/16-bit PCM, Gemini expects 16kHz/16-bit PCM
   Uint8List _convertAudioFormat(Uint8List frameAudio) {
-    // Frame audio should already be 16kHz/16-bit based on our streaming config
-    // But we'll ensure it's in the correct format for Gemini
-    return frameAudio;
+    // Frame audio is 8kHz/16-bit PCM (using high 10 bits as per official spec)
+    // Upsample from 8kHz to 16kHz for Gemini compatibility
+    if (AudioUpsampler.isValidPcm16(frameAudio)) {
+      return AudioUpsampler.upsample8kTo16k(frameAudio);
+    } else {
+      // Return original if not valid PCM16 format
+      return frameAudio;
+    }
   }
 
   /// Handle voice activity detected
