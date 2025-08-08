@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
 import 'package:frame_msg/tx/plain_text.dart';
 import 'package:frame_msg/tx/capture_settings.dart';
+import 'package:frame_msg/tx/code.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 // import 'package:google_generative_ai/google_generative_ai.dart'; // Not needed - using WebSocket realtime API
@@ -15,6 +16,7 @@ import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dar
 import 'package:frame_realtime_gemini_voicevision/services/frame_audio_streaming_service.dart';
 import 'package:frame_realtime_gemini_voicevision/services/frame_gemini_realtime_integration.dart';
 import 'package:frame_realtime_gemini_voicevision/gemini_realtime.dart' as gemini_realtime;
+import 'package:frame_realtime_gemini_voicevision/audio_upsampler.dart';
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
 // Foreground service (matches official repository)
@@ -172,8 +174,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🔧 Initializing Frame services...');
       
-      // Initialize Frame audio streaming service
-      _frameAudioService = FrameAudioStreamingService(_logEvent);
+      // Audio streaming now handled directly using official Frame protocol
+      _logEvent('🎤 Audio will be handled via official Frame message protocol');
       
       // Initialize Gemini Realtime service  
       _geminiRealtime = gemini_realtime.GeminiRealtime(
@@ -181,8 +183,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _logEvent, // Event logger
       );
       
-      // Subscribe to Frame audio service logs
-      _frameLogSubscription = _frameAudioService!.logStream.listen(_logEvent);
+      // Frame audio logs handled directly in main message processing
       
       _logEvent('✅ Frame services initialized');
     } catch (e) {
@@ -310,14 +311,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         if (data.isNotEmpty) {
           _logEvent('📦 Frame data received: ${data.length} bytes');
           
-          // Check if this might be photo data
-          if (data.length > 1000) { // Photos are typically larger
+          // Handle official Frame message protocol
+          final messageType = data[0];
+          
+          // Handle audio data messages (from Frame Lua script)
+          if (messageType == 0x05 || messageType == 0x06) {
+            // 0x05 = AUDIO_DATA_NON_FINAL_MSG, 0x06 = AUDIO_DATA_FINAL_MSG
+            if (data.length > 1) {
+              final audioData = Uint8List.fromList(data.sublist(1));
+              _handleAudioData(audioData, messageType == 0x06);
+            }
+          }
+          // Handle photo data (JPEG detection)
+          else if (data.length > 1000 && 
+              data.length >= 2 && 
+              data[0] == 0xFF && data[1] == 0xD8) {
             try {
               final photoData = Uint8List.fromList(data);
+              _logEvent('📸 JPEG photo detected: ${data.length} bytes');
               _handlePhotoReceived(photoData);
             } catch (e) {
               _logEvent('⚠️ Photo processing error: $e');
             }
+          }
+          // Handle tap messages (0x09)
+          else if (messageType == 0x09) {
+            _logEvent('👆 Frame tap detected');
           }
         }
       });
@@ -338,23 +357,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🎤 Preparing Frame audio services...');
       
-      if (_frameAudioService != null && _geminiRealtime != null) {
-        // Create integration service but don't deploy scripts yet
-        _frameGeminiIntegration = FrameGeminiRealtimeIntegration(
-          frameAudioService: _frameAudioService!,
-          geminiRealtime: _geminiRealtime!,
-          frameDevice: frame,
-          vectorDb: _vectorDb,
-          logger: _logEvent,
-        );
-        
-        // Initialize integration without Frame script deployment
-        final integrationReady = await _frameGeminiIntegration!.initialize();
-        if (integrationReady) {
-          _logEvent('✅ Audio services ready (scripts will load on session start)');
-        } else {
-          _logEvent('⚠️ Audio services partially ready');
-        }
+      if (_geminiRealtime != null) {
+        // For now, skip integration service creation - use direct Frame protocol
+        _logEvent('🔗 Using direct Frame protocol - ready for audio streaming');
       }
       
     } catch (e) {
@@ -450,42 +455,43 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   }
 
   Future<void> _startAudioStreaming() async {
-    if (_frameAudioService == null || _isAudioStreaming || !_isConnected) return;
+    if (_isAudioStreaming || !_isConnected || frame == null) return;
     
     try {
-      // Use Frame native parameters: 8kHz/16-bit (official Brilliant Labs spec)
-      final success = await _frameAudioService!.startStreaming(
-        sampleRate: 8000,  // Frame native sample rate
-        bitDepth: 16,      // Frame native bit depth (16-bit PCM using high 10 bits)
-      );
+      _logEvent('🎤 Starting Frame audio streaming (official protocol)...');
       
-      if (success) {
-        setState(() {
-          _isAudioStreaming = true;
-          _audioPacketsReceived = 0;
-          _totalAudioBytes = 0;
-        });
-        _logEvent('🎤 Audio streaming started (8kHz/16-bit PCM)');
-      } else {
-        _logEvent('❌ Failed to start audio streaming');
-      }
+      // Send audio subscription message using official Frame protocol
+      // Message 0x30 (AUDIO_SUBS_MSG) with value 1 = start audio subscription
+      await frame!.sendMessage(0x30, TxCode(value: 1).pack());
+      
+      setState(() {
+        _isAudioStreaming = true;
+        _audioPacketsReceived = 0;
+        _totalAudioBytes = 0;
+      });
+      
+      _logEvent('✅ Audio streaming started - Frame will send audio data via 0x05/0x06 messages');
     } catch (e) {
       _logEvent('❌ Audio streaming error: $e');
     }
   }
 
   Future<void> _stopAudioStreaming() async {
-    if (_frameAudioService == null || !_isAudioStreaming) return;
+    if (!_isAudioStreaming || frame == null) return;
     
     try {
-      await _frameAudioService!.stopStreaming();
+      _logEvent('⏹️ Stopping Frame audio streaming...');
+      
+      // Send audio unsubscribe message using official Frame protocol
+      // Message 0x30 (AUDIO_SUBS_MSG) with value 0 = stop audio subscription
+      await frame!.sendMessage(0x30, TxCode(value: 0).pack());
       
       setState(() {
         _isAudioStreaming = false;
         _isVoiceDetected = false;
       });
       
-      _logEvent('⏹️ Audio streaming stopped');
+      _logEvent('✅ Audio streaming stopped');
     } catch (e) {
       _logEvent('❌ Audio stop error: $e');
     }
@@ -505,6 +511,35 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _logEvent('📸 Photo request sent');
     } catch (e) {
       _logEvent('❌ Camera capture error: $e');
+    }
+  }
+
+  /// Handle audio data received from Frame using official protocol
+  void _handleAudioData(Uint8List audioData, bool isFinal) {
+    if (audioData.isEmpty) return;
+    
+    // Update statistics
+    _audioPacketsReceived++;
+    _totalAudioBytes += audioData.length;
+    
+    // Log statistics periodically
+    if (_audioPacketsReceived % 50 == 0) {
+      _logEvent('📊 Audio: $_audioPacketsReceived packets, ${(_totalAudioBytes/1024).toStringAsFixed(1)} KB');
+    }
+    
+    // Send audio data to Gemini directly (official repository pattern)
+    if (_geminiRealtime != null && _isSessionActive) {
+      try {
+        // Upsample Frame audio from 8kHz to 16kHz for Gemini
+        final upsampledAudio = AudioUpsampler.upsample8kTo16k(audioData);
+        _geminiRealtime!.sendAudio(upsampledAudio);
+      } catch (e) {
+        _logEvent('❌ Gemini audio send error: $e');
+      }
+    }
+    
+    if (isFinal) {
+      _logEvent('🎤 Audio stream ended (final message received)');
     }
   }
 

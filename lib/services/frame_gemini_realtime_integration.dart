@@ -308,6 +308,33 @@ class FrameGeminiRealtimeIntegration {
     });
   }
 
+  /// Handle audio data received directly from Frame (official protocol)
+  void handleFrameAudio(Uint8List audioData) {
+    if (!_isActive) return;
+    
+    // Process Frame audio data (8kHz) and send to Gemini
+    try {
+      // Upsample Frame audio from 8kHz to 16kHz for Gemini
+      final upsampledAudio = AudioUpsampler.upsample8kTo16k(audioData);
+      
+      // Send upsampled audio to Gemini realtime service
+      _geminiRealtime.sendAudio(upsampledAudio);
+      
+      // Update voice activity detection
+      _isVoiceActive = true;
+      
+      // Reset silence timer
+      _silenceTimer?.cancel();
+      _silenceTimer = Timer(_silenceThreshold, () {
+        _isVoiceActive = false;
+        _logger('🤫 Voice activity ended');
+      });
+      
+    } catch (e) {
+      _logger('❌ Frame audio processing error: $e');
+    }
+  }
+
   /// Check for and play audio responses from Gemini
   void _checkForAudioResponse() {
     if (_geminiRealtime.hasResponseAudio() && !_isPlayingAudio && !_isVoiceActive) {
