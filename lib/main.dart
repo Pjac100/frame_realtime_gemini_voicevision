@@ -7,7 +7,7 @@ import 'package:frame_msg/tx/plain_text.dart';
 import 'package:frame_msg/tx/capture_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+// import 'package:google_generative_ai/google_generative_ai.dart'; // Not needed - using WebSocket realtime API
 import 'package:path_provider/path_provider.dart';
 
 // ObjectBox imports
@@ -17,11 +17,18 @@ import 'package:frame_realtime_gemini_voicevision/services/frame_gemini_realtime
 import 'package:frame_realtime_gemini_voicevision/gemini_realtime.dart' as gemini_realtime;
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 
+// Foreground service (matches official repository)
+import 'package:frame_realtime_gemini_voicevision/foreground_service.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
 // Global ObjectBox store instance
 late Store store;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize foreground service (matches official repository)
+  initializeForegroundService();
   
   // Initialize ObjectBox
   await _initializeObjectBox();
@@ -58,12 +65,13 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Voice options for Gemini integration
+// Voice options for Gemini integration - matches official repository
 enum GeminiVoiceName {
   puck('Puck'),
   charon('Charon'),
   kore('Kore'),
-  fenrir('Fenrir');
+  fenrir('Fenrir'),
+  aoede('Aoede');
 
   const GeminiVoiceName(this.displayName);
   final String displayName;
@@ -87,8 +95,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   String _geminiApiKey = '';
   String? _tempApiKey; // Temporary storage for API key input
   GeminiVoiceName _selectedVoice = GeminiVoiceName.puck;
-  GenerativeModel? _model; // TODO: Will be used for Gemini chat sessions
-  ChatSession? _chatSession;
+  // NOTE: Using WebSocket-based Gemini Realtime API only (matches official repository)
+  // GenerativeModel? _model; // Not needed - using WebSocket realtime connection
+  // ChatSession? _chatSession; // Not needed - using WebSocket realtime connection
   
   // Session state
   bool _isSessionActive = false;
@@ -206,40 +215,21 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     });
     
     if (_geminiApiKey.isNotEmpty) {
-      _initializeGemini();
+      // API key will be used by WebSocket realtime service when session starts
       _logEvent('🤖 Gemini API key loaded');
     } else {
       _logEvent('⚠️ No Gemini API key found');
     }
   }
 
-  void _initializeGemini() {
-    try {
-      _model = GenerativeModel(
-        model: 'gemini-2.0-flash-exp',
-        apiKey: _geminiApiKey,
-        generationConfig: GenerationConfig(
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        ),
-        systemInstruction: Content.system(
-          'You are a helpful AI assistant integrated with Frame smart glasses. '
-          'You can see what the user sees through their camera and hear their voice through the microphone. '
-          'Provide natural, conversational responses. Keep responses concise but helpful. '
-          'You have access to conversation history through local vector search for context. '
-          'The user is speaking to you through Frame glasses with real-time audio.'
-        ),
-      );
+  // No longer needed - using WebSocket-based Gemini Realtime API only
+  // This matches the official repository pattern
+  // void _initializeGemini() {
+  //   // Chat-based Gemini is replaced by WebSocket realtime connection
+  // }
 
-      _chatSession = _model!.startChat();
-      _logEvent('🤖 Gemini conversation model initialized');
-    } catch (e) {
-      _logEvent('❌ Gemini initialization failed: $e');
-    }
-  }
-
-  /// Get Gemini chat session status for UI display
-  bool get isGeminiReady => _chatSession != null;
+  /// Get Gemini readiness status for UI display
+  bool get isGeminiReady => _geminiApiKey.isNotEmpty;
 
   /// Map UI voice enum to Gemini Realtime voice enum
   gemini_realtime.GeminiVoiceName _mapVoiceName(GeminiVoiceName uiVoice) {
@@ -252,6 +242,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         return gemini_realtime.GeminiVoiceName.Kore;
       case GeminiVoiceName.fenrir:
         return gemini_realtime.GeminiVoiceName.Fenrir;
+      case GeminiVoiceName.aoede:
+        return gemini_realtime.GeminiVoiceName.Aoede;
     }
   }
 
@@ -262,8 +254,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _geminiApiKey = key;
       _tempApiKey = null; // Clear temp key
     });
-    _initializeGemini();
-    _logEvent('🔑 Gemini API key saved and initialized');
+    // API key will be used by WebSocket realtime service when session starts
+    _logEvent('🔑 Gemini API key saved');
   }
 
   Future<void> _startScanning() async {
@@ -524,6 +516,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           });
           _logEvent('✅ AI session started successfully');
           
+          // Start foreground service for background operation (matches official repo)
+          try {
+            await startForegroundService();
+            _logEvent('📱 Foreground service started');
+          } catch (e) {
+            _logEvent('⚠️ Foreground service warning: $e');
+          }
+          
           // Start camera capture for vision
           await _startCameraCapture();
         } else {
@@ -640,6 +640,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       setState(() {
         _isSessionActive = false;
       });
+      
+      // Stop foreground service
+      try {
+        await FlutterForegroundTask.stopService();
+        _logEvent('📱 Foreground service stopped');
+      } catch (e) {
+        _logEvent('⚠️ Foreground service stop warning: $e');
+      }
     } catch (e) {
       _logEvent('❌ Session stop error: $e');
       setState(() {
@@ -882,7 +890,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Start AI Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.withValues(alpha: 0.1),
+                      backgroundColor: Colors.green.withAlpha(25),
                     ),
                   ),
                 ),
@@ -893,7 +901,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     icon: const Icon(Icons.stop),
                     label: const Text('Stop Session'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.withValues(alpha: 0.1),
+                      backgroundColor: Colors.red.withAlpha(25),
                     ),
                   ),
                 ),
@@ -1144,9 +1152,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.2),
+                      color: Colors.green.withAlpha(50),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                      border: Border.all(color: Colors.green.withAlpha(128)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1183,7 +1191,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                       icon: const Icon(Icons.bluetooth_disabled),
                       label: const Text('Disconnect'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.withValues(alpha: 0.1),
+                        backgroundColor: Colors.red.withAlpha(25),
                       ),
                     ),
                   ),
@@ -1269,7 +1277,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.grey.withAlpha(75)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: _eventLog.isEmpty
