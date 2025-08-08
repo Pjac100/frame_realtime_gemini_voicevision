@@ -269,14 +269,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     
     try {
       // Official repository pattern: single unified connection method
-      await tryScanAndConnectAndStart(andRun: false); // We'll handle run() manually
+      await tryScanAndConnectAndStart(andRun: true); // Deploy and start Lua scripts automatically
       
-      // Check if connection was successful
-      if (currentState == ApplicationState.ready && frame != null) {
+      // Check if connection and script deployment was successful
+      if ((currentState == ApplicationState.ready || currentState == ApplicationState.running) && frame != null) {
         setState(() {
           _isConnected = true;
         });
-        _logEvent('✅ Frame connected');
+        _logEvent('✅ Frame connected with official Lua scripts running');
         
         // Set up Frame listeners first (lightweight)
         _setupFrameListeners();
@@ -284,7 +284,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         // Initialize Frame services after successful connection
         await _initializeFrameServices();
       } else {
-        _logEvent('❌ Frame connection failed');
+        _logEvent('❌ Frame connection/script deployment failed - state: $currentState');
       }
       
     } catch (e) {
@@ -401,14 +401,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🚀 Starting AI session...');
       
-      // Deploy Frame scripts now (not during connection)
-      if (_frameAudioService != null) {
-        _logEvent('📤 Deploying Frame audio scripts...');
-        final scriptsDeployed = await _frameAudioService!.deployAudioScripts();
-        if (!scriptsDeployed) {
-          _logEvent('⚠️ Script deployment failed, continuing with basic features');
-        }
-      }
+      // Scripts are automatically deployed by simple_frame_app during connection
+      _logEvent('📱 Frame ready - official Lua scripts already deployed');
       
       // Use the integrated service if available
       if (_frameGeminiIntegration != null) {
@@ -1248,10 +1242,27 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // Required methods for SimpleFrameAppState mixin
   @override
   Future<void> run() async {
-    _logEvent('🏃 Starting Frame app run');
+    _logEvent('🏃 Frame app run - Lua scripts are now running');
     currentState = ApplicationState.running;
     if (mounted) setState(() {});
-    // The actual running logic is handled by the session management
+    
+    // The Frame is now running the official Lua script from assets/frame_app.lua
+    // The script handles audio streaming, camera capture, and display updates
+    // We can now send messages to the Frame using the official message protocol
+    
+    try {
+      // Send initial message to Frame display (like official repository)
+      await frame!.sendMessage(0x0b, TxPlainText(
+        text: 'Frame Connected!\nReady for AI',
+        x: 1,
+        y: 1,
+        paletteOffset: 2,
+      ).pack());
+      
+      _logEvent('✅ Frame display initialized');
+    } catch (e) {
+      _logEvent('⚠️ Frame display setup: $e');
+    }
   }
 
   @override

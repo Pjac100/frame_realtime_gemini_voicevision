@@ -126,6 +126,7 @@ flutter:
     - packages/frame_msg/lua/camera.min.lua
     - packages/frame_msg/lua/code.min.lua
     - packages/frame_msg/lua/plain_text.min.lua
+    - assets/frame_app.lua
     
     
     # ═══ MOBILEBERT MODEL & VOCABULARY ═══

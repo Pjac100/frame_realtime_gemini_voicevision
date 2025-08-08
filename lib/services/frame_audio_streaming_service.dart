@@ -63,7 +63,7 @@ class FrameAudioStreamingService {
     }
   }
   
-  /// Deploy audio scripts only when starting a session
+  /// Deploy audio scripts using official repository pattern
   Future<bool> deployAudioScripts() async {
     if (_frameDevice == null) {
       _emit('❌ No Frame device available for script deployment');
@@ -71,57 +71,18 @@ class FrameAudioStreamingService {
     }
     
     try {
-      _emit('📤 Deploying audio scripts for session...');
-      await _uploadAudioApp();
-      _emit('✅ Audio scripts deployed');
+      _emit('📤 Scripts deployed by simple_frame_app - ready for audio');
+      // Note: simple_frame_app package handles Lua script deployment automatically
+      // during tryScanAndConnectAndStart() - we don't need custom deployment
       return true;
       
     } catch (e) {
-      _emit('❌ Script deployment failed: $e');
+      _emit('❌ Script deployment check failed: $e');
       return false;
     }
   }
 
-  /// Simplified audio app deployment following official pattern
-  Future<void> _uploadAudioApp() async {
-    _emit('📤 Deploying minimal audio handler...');
-    
-    // Ultra-minimal script to avoid connection issues
-    const minimalScript = '''
--- Ultra-minimal Frame handler - no loops to avoid timeouts
-local data = require('data')
-print("Minimal handler loaded")
-frame.display.text("Ready", 20, 60)
-frame.display.show()
-
--- Process single message and exit
-if data.process_raw_items() > 0 then
-    local msg_type, payload = data.get_message()
-    if msg_type == 1 then
-        print("Audio start request")
-        frame.display.text("Audio ON", 20, 60)
-        frame.display.show()
-    end
-end
-''';
-
-    try {
-      // Clear any existing scripts
-      await _frameDevice!.sendBreakSignal();
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Send minimal script directly - no file system complexity
-      _emit('🚀 Loading minimal audio handler...');
-      await _frameDevice!.sendString(minimalScript, awaitResponse: false);
-      await Future.delayed(const Duration(milliseconds: 1000));
-      
-      _emit('✅ Minimal audio handler deployed');
-      
-    } catch (e) {
-      _emit('❌ Failed to deploy audio handler: $e');
-      throw Exception('Audio handler deployment failed: $e');
-    }
-  }
+  // Custom script deployment removed - using official simple_frame_app deployment pattern
 
   /// Handle data messages from Frame
   void _handleFrameData(List<int> data) {
