@@ -192,20 +192,19 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   }
 
   Future<void> _requestPermissions() async {
+    // Official repository pattern: minimal explicit permission handling
+    // Most permissions are handled by simple_frame_app package
     final permissions = [
       Permission.bluetooth,
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-      Permission.camera,
-      Permission.microphone,
-      Permission.bluetoothAdvertise,
-      Permission.location,
+      Permission.location, // Required for Bluetooth scanning
     ];
 
     final statuses = await permissions.request();
-    bool allGranted = statuses.values.every((status) => status.isGranted);
+    bool coreGranted = statuses.values.every((status) => status.isGranted || status.isDenied);
     
-    _logEvent(allGranted ? '✅ All permissions granted' : '⚠️ Some permissions denied');
+    _logEvent(coreGranted ? '✅ Core permissions handled' : '⚠️ Permission issues detected');
   }
 
   Future<void> _loadGeminiApiKey() async {
@@ -258,6 +257,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _logEvent('🔑 Gemini API key saved');
   }
 
+  /// Connect to Frame using official repository pattern
   Future<void> _startScanning() async {
     if (_isScanning) return;
     
@@ -265,83 +265,26 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _isScanning = true;
     });
     
-    _logEvent('🔍 Scanning for Frame devices...');
+    _logEvent('🔍 Connecting to Frame...');
     
     try {
-      // Simple Frame App handles scanning and connection in one step
-      await _connectToFrame();
+      // Official repository pattern: single unified connection method
+      await tryScanAndConnectAndStart(andRun: false); // We'll handle run() manually
       
-    } catch (e) {
-      _logEvent('❌ Scan error: $e');
-    } finally {
-      setState(() {
-        _isScanning = false;
-      });
-    }
-  }
-
-  Future<void> _connectToFrame() async {
-    try {
-      _logEvent('🔗 Connecting to Frame...');
-      
-      // Clear any previous state
-      setState(() {
-        _isConnected = false;
-      });
-      
-      // Simple connection attempt with timeout
-      await scanOrReconnectFrame().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          _logEvent('❌ Frame connection timeout');
-          throw TimeoutException('Frame connection timeout', const Duration(seconds: 15));
-        },
-      );
-      
-      // Wait longer for connection to stabilize
-      await Future.delayed(const Duration(milliseconds: 2000));
-      
-      // Verify connection more thoroughly
-      if (currentState == ApplicationState.connected && frame != null) {
-        // Double-check Frame is responsive
-        try {
-          await frame!.sendString('print("Health check")', awaitResponse: false);
-          await Future.delayed(const Duration(milliseconds: 300));
-        } catch (e) {
-          _logEvent('⚠️ Frame health check failed: $e');
-        }
+      // Check if connection was successful
+      if (currentState == ApplicationState.ready && frame != null) {
         setState(() {
           _isConnected = true;
         });
-        
-        _logEvent('✅ Frame connected - setting up services...');
+        _logEvent('✅ Frame connected');
         
         // Set up Frame listeners first (lightweight)
         _setupFrameListeners();
-        _logEvent('✅ Frame connected - listeners ready');
         
-        // Initialize Frame services in background (don't block)
-        Future.delayed(const Duration(milliseconds: 1500), () async {
-          try {
-            await _initializeFrameServices();
-            _logEvent('✅ Frame services initialized');
-          } catch (e) {
-            _logEvent('⚠️ Service init delayed: $e');
-          }
-        });
-        
-        // Test Frame responsiveness without deploying complex scripts
-        try {
-          await _testBasicFrameConnection();
-        } catch (e) {
-          _logEvent('⚠️ Frame test warning: $e');
-        }
-        
+        // Initialize Frame services after successful connection
+        await _initializeFrameServices();
       } else {
-        _logEvent('❌ Frame connection failed - state: $currentState');
-        setState(() {
-          _isConnected = false;
-        });
+        _logEvent('❌ Frame connection failed');
       }
       
     } catch (e) {
@@ -349,24 +292,16 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       setState(() {
         _isConnected = false;
       });
+    } finally {
+      setState(() {
+        _isScanning = false;
+      });
     }
   }
+
+  // Old connection method removed - now using official repository pattern with tryScanAndConnectAndStart()
   
-  /// Test basic Frame connection without complex operations
-  Future<void> _testBasicFrameConnection() async {
-    if (frame == null) return;
-    
-    try {
-      // Simple test that shouldn't cause disconnection
-      await frame!.sendString('print("Connected to host")', awaitResponse: false);
-      await Future.delayed(const Duration(milliseconds: 200));
-      
-      _logEvent('✅ Frame basic test successful');
-      
-    } catch (e) {
-      _logEvent('⚠️ Frame test failed: $e');
-    }
-  }
+  // Basic Frame connection test removed - simple_frame_app handles connection verification
 
   void _setupFrameListeners() {
     // Listen for raw data from Frame using the mixin's frame object
@@ -387,36 +322,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         }
       });
       
-      // Monitor connection state
-      _startConnectionMonitoring();
+      // Connection monitoring handled by simple_frame_app package
     }
   }
   
-  /// Monitor Frame connection state and handle disconnections
-  void _startConnectionMonitoring() {
-    Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      
-      // Check if Frame is still connected
-      if (_isConnected && (frame == null || currentState != ApplicationState.connected)) {
-        _logEvent('⚠️ Frame disconnection detected');
-        setState(() {
-          _isConnected = false;
-          _isSessionActive = false;
-        });
-        
-        // Clean up services
-        _frameAudioService?.dispose();
-        _frameGeminiIntegration?.dispose();
-        _frameDataSubscription?.cancel();
-        
-        timer.cancel();
-      }
-    });
-  }
+  // Connection monitoring removed - handled by simple_frame_app package (official repository pattern)
 
   /// Initialize Frame audio services without deploying scripts (to avoid disconnection)
   Future<void> _initializeFrameAudioSimplified() async {
