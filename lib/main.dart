@@ -739,9 +739,20 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         try {
           final responseAudio = _geminiRealtime!.getResponseAudioByteData();
           if (responseAudio.lengthInBytes > 0) {
-            // Feed audio using PcmArrayInt16 like original repository
-            FlutterPcmSound.feed(PcmArrayInt16(bytes: responseAudio));
-            _playingAudio = true;
+            // Convert ByteData to Int16 list for flutter_pcm_sound (like integration service)
+            final audioSamples = <int>[];
+            for (int i = 0; i < responseAudio.lengthInBytes - 1; i += 2) {
+              final sample = responseAudio.getInt16(i, Endian.little);
+              audioSamples.add(sample);
+            }
+            
+            // Feed audio using PcmArrayInt16.fromList like original repository
+            if (audioSamples.isNotEmpty) {
+              FlutterPcmSound.feed(PcmArrayInt16.fromList(audioSamples));
+              _playingAudio = true;
+            } else {
+              _playingAudio = false;
+            }
           } else {
             // No more audio data available
             _playingAudio = false;
