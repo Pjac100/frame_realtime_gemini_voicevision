@@ -105,6 +105,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   bool _isSessionActive = false;
   Uint8List? _lastPhoto;
   
+  // Photo capture timer (like original repository)
+  Timer? _photoTimer;
+  
   // Audio state
   bool _isAudioStreaming = false;
   bool _isVoiceDetected = false;
@@ -144,6 +147,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _audioSubscription?.cancel();
     _frameLogSubscription?.cancel();
     _frameDataSubscription?.cancel();
+    _photoTimer?.cancel(); // Clean up photo timer
     _frameAudioService?.dispose();
     _frameGeminiIntegration?.dispose();
     if (frame != null) {
@@ -314,7 +318,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           // Handle official Frame message protocol
           final messageType = data[0];
           
-          // Handle audio data messages (from Frame Lua script)
+          // Handle audio data messages (from Frame Lua script) - PRIORITY for performance
           if (messageType == 0x05 || messageType == 0x06) {
             // 0x05 = AUDIO_DATA_NON_FINAL_MSG, 0x06 = AUDIO_DATA_FINAL_MSG
             if (data.length > 1) {
@@ -322,21 +326,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               _handleAudioData(audioData, messageType == 0x06);
             }
           }
-          // Handle photo data (JPEG detection)
-          else if (data.length > 1000 && 
-              data.length >= 2 && 
-              data[0] == 0xFF && data[1] == 0xD8) {
-            try {
-              final photoData = Uint8List.fromList(data);
-              _logEvent('📸 JPEG photo detected: ${data.length} bytes');
-              _handlePhotoReceived(photoData);
-            } catch (e) {
-              _logEvent('⚠️ Photo processing error: $e');
-            }
-          }
-          // Handle tap messages (0x09)
+          // Handle tap messages (0x09) - Quick check
           else if (messageType == 0x09) {
             _logEvent('👆 Frame tap detected');
+          }
+          // Handle photo data - optimized detection for performance
+          else if (data.length > 500) { // Lower threshold for small photos
+            // Check for JPEG after message type byte (official Frame protocol)
+            if (data.length >= 3 && data[1] == 0xFF && data[2] == 0xD8) {
+              try {
+                final photoData = Uint8List.fromList(data.sublist(1));
+                _logEvent('📸 Frame JPEG photo: ${photoData.length} bytes');
+                _handlePhotoReceived(photoData);
+              } catch (e) {
+                _logEvent('⚠️ Frame photo error: $e');
+              }
+            }
+            // Check for raw JPEG data (direct from Frame camera)
+            else if (data.length >= 2 && data[0] == 0xFF && data[1] == 0xD8) {
+              try {
+                final photoData = Uint8List.fromList(data);
+                _logEvent('📸 Raw JPEG photo: ${data.length} bytes');
+                _handlePhotoReceived(photoData);
+              } catch (e) {
+                _logEvent('⚠️ Raw photo error: $e');
+              }
+            }
           }
         }
       });
@@ -501,17 +516,40 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (frame == null || !_isConnected) return;
     
     try {
-      _logEvent('📷 Starting camera capture...');
+      _logEvent('📷 Starting periodic camera capture...');
       
-      // Request a photo using Frame SDK
+      // Start periodic photo capture like original repository (every 3 seconds)
+      _photoTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+        if (!_isConnected || !_isSessionActive) {
+          timer.cancel();
+          return;
+        }
+        
+        try {
+          // Request a photo using Frame SDK with higher quality
+          await frame!.sendMessage(0x0d, TxCaptureSettings(
+            qualityIndex: 75, // Higher quality like original
+          ).pack());
+        } catch (e) {
+          _logEvent('⚠️ Periodic photo error: $e');
+        }
+      });
+      
+      // Take first photo immediately
       await frame!.sendMessage(0x0d, TxCaptureSettings(
-        qualityIndex: 50,
+        qualityIndex: 75,
       ).pack());
       
-      _logEvent('📸 Photo request sent');
+      _logEvent('📸 Periodic photo capture started');
     } catch (e) {
       _logEvent('❌ Camera capture error: $e');
     }
+  }
+
+  Future<void> _stopCameraCapture() async {
+    _photoTimer?.cancel();
+    _photoTimer = null;
+    _logEvent('📷 Photo capture stopped');
   }
 
   /// Handle audio data received from Frame using official protocol
@@ -566,6 +604,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     if (!_isSessionActive) return;
 
     try {
+      // Stop photo capture first
+      await _stopCameraCapture();
+      
       // Use the new integrated service if available
       if (_frameGeminiIntegration != null) {
         await _frameGeminiIntegration!.stopSession();
@@ -1172,10 +1213,34 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                           _lastPhoto!,
                           fit: BoxFit.contain,
                           width: double.infinity,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error, color: Colors.red, size: 32),
+                                  SizedBox(height: 8),
+                                  Text('Image display error', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       )
-                    : const Center(
-                        child: Text('No photo captured yet'),
+                    : Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.camera_alt, color: Colors.grey, size: 32),
+                            const SizedBox(height: 8),
+                            Text(
+                              _isSessionActive 
+                                ? 'Waiting for photo capture...' 
+                                : 'No photo captured yet',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
                       ),
               ),
             ),
