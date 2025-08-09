@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:969174070785586791",
-      "lastPropertyId": "3:1648759725581703846",
+      "lastPropertyId": "5:4497201743384106223",
       "name": "Document",
       "properties": [
         {
@@ -24,20 +24,32 @@
           "name": "embedding",
           "type": 28,
           "flags": 8,
-          "indexId": "1:9089198750530166764"
+          "indexId": "2:4776315006040291726"
+        },
+        {
+          "id": "4:5382117186259043279",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "5:4497201743384106223",
+          "name": "metadata",
+          "type": 9
         }
       ],
       "relations": []
     }
   ],
   "lastEntityId": "1:969174070785586791",
-  "lastIndexId": "1:9089198750530166764",
+  "lastIndexId": "2:4776315006040291726",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
   "modelVersionParserMinimum": 5,
   "retiredEntityUids": [],
-  "retiredIndexUids": [],
+  "retiredIndexUids": [
+    9089198750530166764
+  ],
   "retiredPropertyUids": [],
   "retiredRelationUids": [],
   "version": 1

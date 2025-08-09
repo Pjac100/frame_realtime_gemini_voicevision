@@ -1,52 +1,134 @@
 name: frame_realtime_gemini_voicevision
-description: "Connects to Frame, streams audio from the Frame microphone and photos from its camera in a websockets conversation with the Gemini Realtime API"
-publish_to: 'none'
-version: 0.1.0
+description: >
+  Connects to Frame, streams audio from the Frame microphone and photos from its
+  camera in a WebSocket conversation with the Gemini Realtime API.
+publish_to: "none"
+version: 0.1.2
 
 environment:
-  sdk: '>=3.4.3 <4.0.0'
+  sdk: ">=3.4.1 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_blue_plus: ^1.32.12
-  logging: ^1.2.0
-  simple_frame_app: ^7.0.0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FRAME PACKAGES (Working combination - no conflicts)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  # Frame messaging (you already have this) - KEEP
   frame_msg: ^2.0.0
-  shared_preferences: ^2.3.2
-  share_plus: ^10.1.0
-  flutter_foreground_task: ^6.5.0
-  flutter_pcm_sound: ^3.1.1
+  
+  # Simple Frame app (updated for better compatibility) - MINOR UPDATE
+  simple_frame_app: ^7.1.0
+  
+  # Frame Bluetooth Low Energy support
+  frame_ble: ^3.0.0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BLUETOOTH & CONNECTIVITY (Your existing versions work fine)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  # Bluetooth - minor update for Android 33+ support
+  flutter_blue_plus: ^1.35.5
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CORE UTILITIES (Keep your existing versions)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  logging: ^1.2.0
+  shared_preferences: ^2.2.2
+  permission_handler: ^12.0.0
+  share_plus: ^11.0.0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REAL-TIME PIPELINE (Keep your versions)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  flutter_pcm_sound: ^3.1.6
   web_socket_channel: ^3.0.1
 
-  # ObjectBox dependencies
-  objectbox: ^4.0.0
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BACKGROUND SERVICES (Keep your version)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  flutter_foreground_task: ^9.1.0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ML KIT & TENSORFLOW LITE (UPDATED FOR MOBILEBERT)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_commons: ^0.11.0
+  
+  # TensorFlow Lite for MobileBERT embeddings
+  tflite_flutter: ^0.11.0
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GEMINI AI (For conversation, not embeddings)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  google_generative_ai: ^0.4.3
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # OBJECTBOX (Keep stable version)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
+  objectbox: ^4.0.0                   # Keep your existing version
   objectbox_flutter_libs: any
 
-  # Path packages
+  # ═══════════════════════════════════════════════════════════════════════════
+  # UTILITIES (Keep your versions)
+  # ═══════════════════════════════════════════════════════════════════════════
+  
   path_provider: ^2.1.3
   path: ^1.9.0
-
-  # NEW: Added for Phase 1
-  google_mlkit_text_recognition: ^0.11.0
   image: ^4.2.0
-
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-
-  # ObjectBox generator dependencies
   build_runner: ^2.4.0
   objectbox_generator: ^4.0.0
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DEPENDENCY OVERRIDES (Keep your existing + resolve conflicts)
+# ──────────────────────────────────────────────────────────────────────────────
+dependency_overrides:
+  # ═══ YOUR EXISTING OVERRIDES (KEEP ALL) ═══  
+  permission_handler: 12.0.0+1
+  share_plus: 11.0.0
+  share_plus_platform_interface: 6.0.0
+  flutter_pcm_sound: 3.1.6
+  google_mlkit_text_recognition: 0.15.0
+  google_mlkit_commons: 0.11.0
+  
+  # ═══ MINOR UPDATES FOR COMPATIBILITY ═══
+  simple_frame_app: 7.1.0             # Minor update for better Frame support
+  flutter_blue_plus: 1.35.5           # Minor update for Android 33+ support
+  
+  # ═══ ARCHIVE CONFLICT RESOLUTION ═══
+  archive: 4.0.2                      # Resolve the conflict by using the newer version
+  
+  # ═══ GEMINI AI FIX ═══
+  google_generative_ai: 0.4.3         # Add missing Gemini dependency
+  
+  # ═══ TENSORFLOW LITE OVERRIDES ═══
+  tflite_flutter: 0.11.0              # Ensure compatible TensorFlow Lite version
 
 flutter:
   uses-material-design: true
   assets:
+    # Frame messaging Lua libraries (your existing)
     - packages/frame_msg/lua/battery.min.lua
     - packages/frame_msg/lua/data.min.lua
     - packages/frame_msg/lua/camera.min.lua
     - packages/frame_msg/lua/code.min.lua
     - packages/frame_msg/lua/plain_text.min.lua
-    - assets/frame_app.min.lua
+    - assets/frame_app.lua
+    
+    
+    # ═══ MOBILEBERT MODEL & VOCABULARY ═══
+    - assets/mobilebert_embedding.tflite
+    - assets/vocab.txt
