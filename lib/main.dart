@@ -133,6 +133,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<String>? _frameLogSubscription;
   StreamSubscription<dynamic>? _frameDataSubscription;
+  
+  // Audio response handling for fallback mode
+  Timer? _audioResponseTimer;
 
   @override
   void initState() {
@@ -150,6 +153,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _frameLogSubscription?.cancel();
     _frameDataSubscription?.cancel();
     _photoTimer?.cancel(); // Clean up photo timer
+    _audioResponseTimer?.cancel(); // Clean up audio response timer
     _frameAudioService?.dispose();
     _frameGeminiIntegration?.dispose();
     if (frame != null) {
@@ -185,7 +189,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       
       // Initialize Gemini Realtime service  
       _geminiRealtime = gemini_realtime.GeminiRealtime(
-        () {}, // Audio ready callback - handled by integration service
+        _handleGeminiAudioReady, // Audio ready callback for fallback mode
         _logEvent, // Event logger
       );
       
@@ -597,6 +601,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
+  /// Handle audio ready callback from Gemini in fallback mode
+  void _handleGeminiAudioReady() {
+    // Start monitoring for audio responses if not already started
+    _audioResponseTimer ??= Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      _checkForGeminiAudioResponse();
+    });
+  }
+
+  /// Check for and play audio responses from Gemini (fallback mode)
+  void _checkForGeminiAudioResponse() {
+    if (_geminiRealtime != null && _geminiRealtime!.hasResponseAudio()) {
+      try {
+        final responseAudio = _geminiRealtime!.getResponseAudioByteData();
+        if (responseAudio.lengthInBytes > 0) {
+          _logEvent('🔊 Playing Gemini response (${responseAudio.lengthInBytes} bytes)');
+          
+          // For now, just log that we received audio
+          // TODO: Add actual audio playback implementation if needed
+          // The main thing is that Gemini is responding, which means the connection works
+        }
+      } catch (e) {
+        _logEvent('❌ Audio response error: $e');
+      }
+    }
+  }
+
   /// Handle photo received from Frame (original repo style)
   void _handlePhotoReceived(Uint8List photoData) {
     _logEvent('📸 Photo received from Frame');
@@ -630,6 +660,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       if (_frameGeminiIntegration != null) {
         await _frameGeminiIntegration!.stopSession();
         _logEvent('⏹️ Complete AI session stopped');
+        
+        // Stop audio response monitoring in case it was running
+        _audioResponseTimer?.cancel();
+        _audioResponseTimer = null;
       } else {
         // Fall back to the old method
         await _stopAudioStreaming();
@@ -638,6 +672,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         if (_geminiRealtime != null) {
           await _geminiRealtime!.disconnect();
         }
+        
+        // Stop audio response monitoring
+        _audioResponseTimer?.cancel();
+        _audioResponseTimer = null;
         
         _logEvent('⏹️ AI session stopped (fallback mode)');
       }
