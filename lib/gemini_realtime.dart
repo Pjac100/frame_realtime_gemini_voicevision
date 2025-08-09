@@ -105,8 +105,20 @@ class GeminiRealtime {
       return false;
     }
 
-    // set up stream handler for channel to handle events
-    _channelSubs = _channel!.stream.listen(_handleGeminiEvent);
+    // set up stream handler for channel to handle events with error handling
+    _channelSubs = _channel!.stream.listen(
+      _handleGeminiEvent,
+      onError: (error) {
+        eventLogger('Gemini WebSocket error: $error');
+        _log.severe('WebSocket error: $error');
+        _connected = false;
+      },
+      onDone: () {
+        eventLogger('Gemini WebSocket closed');
+        _log.info('WebSocket connection closed');
+        _connected = false;
+      },
+    );
 
     // set up the config for the model/modality
     _log.info(_setupMap);

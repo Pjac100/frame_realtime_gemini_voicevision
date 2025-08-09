@@ -317,8 +317,10 @@ class FrameGeminiRealtimeIntegration {
       // Upsample Frame audio from 8kHz to 16kHz for Gemini
       final upsampledAudio = AudioUpsampler.upsample8kTo16k(audioData);
       
-      // Send upsampled audio to Gemini realtime service
-      _geminiRealtime.sendAudio(upsampledAudio);
+      // Send upsampled audio to Gemini realtime service only if connected
+      if (_geminiRealtime.isConnected()) {
+        _geminiRealtime.sendAudio(upsampledAudio);
+      }
       
       // Update voice activity detection
       _isVoiceActive = true;
