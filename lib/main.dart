@@ -456,15 +456,29 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           _logEvent('❌ Failed to start AI session');
         }
       } else {
-        // Fallback mode
-        setState(() {
-          _isSessionActive = true;
-        });
-        _logEvent('🎤 AI session started (basic mode)');
+        // Fallback mode - connect to Gemini directly
+        _logEvent('🔗 Connecting to Gemini (basic mode)...');
         
-        // Start audio streaming and camera
-        await _startAudioStreaming();
-        await _startCameraCapture();
+        final geminiConnected = await _geminiRealtime!.connect(
+          _geminiApiKey,
+          _mapVoiceName(_selectedVoice),
+          'You are a helpful AI assistant integrated with Frame smart glasses. '
+          'You can see what the user sees through their camera and hear their voice. '
+          'Keep responses concise and conversational. The user is wearing Frame glasses.',
+        );
+        
+        if (geminiConnected) {
+          setState(() {
+            _isSessionActive = true;
+          });
+          _logEvent('✅ AI session started (basic mode)');
+          
+          // Start audio streaming and camera
+          await _startAudioStreaming();
+          await _startCameraCapture();
+        } else {
+          _logEvent('❌ Failed to connect to Gemini');
+        }
       }
     } catch (e) {
       _logEvent('❌ Session start error: $e');
@@ -619,6 +633,12 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       } else {
         // Fall back to the old method
         await _stopAudioStreaming();
+        
+        // Disconnect from Gemini in basic mode
+        if (_geminiRealtime != null) {
+          await _geminiRealtime!.disconnect();
+        }
+        
         _logEvent('⏹️ AI session stopped (fallback mode)');
       }
 
