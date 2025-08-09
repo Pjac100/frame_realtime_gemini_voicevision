@@ -227,14 +227,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _logEvent, // Event logger
       );
       
-      // Initialize FlutterPcmSound for audio playback like original repository
+      // Initialize FlutterPcmSound for audio playbook like original repository
       try {
         const sampleRate = 24000; // Same as original repository
         await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
-        FlutterPcmSound.setFeedThreshold(sampleRate ~/ 30); // Same as original
+        // Use same feed threshold as original: smaller for more responsive audio
+        FlutterPcmSound.setFeedThreshold(sampleRate ~/ 30); // 800 frames = ~33ms buffer
         FlutterPcmSound.setFeedCallback(_onAudioFeed);
         _isAudioPlayerSetup = true;
-        _logEvent('✅ FlutterPcmSound audio player ready');
+        _logEvent('✅ FlutterPcmSound audio player ready (${sampleRate ~/ 30} frame threshold)');
       } catch (e) {
         _logEvent('⚠️ FlutterPcmSound setup error: $e');
       }
@@ -671,6 +672,13 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   void _handleFrameAudio(Uint8List pcm16x8) {
     if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
       try {
+        // Stop any ongoing audio playback when user speaks (feedback prevention)
+        if (_playingAudio) {
+          _geminiRealtime!.stopResponseAudio();
+          _playingAudio = false;
+          _logEvent('🤫 Interrupted AI response - user speaking');
+        }
+        
         // Upsample PCM16 from 8kHz to 16kHz for Gemini (same as original)
         final pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8);
         _geminiRealtime!.sendAudio(pcm16x16);
@@ -723,23 +731,31 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  /// Audio feed callback like original repository
+  /// Audio feed callback like original repository with improved flow control
   void _onAudioFeed(int remainingFrames) {
-    if (remainingFrames < 2000) { // Same threshold as original
+    // Feed audio when buffer is getting low (like original repo)
+    if (remainingFrames < 2000) {
       if (_geminiRealtime != null && _geminiRealtime!.hasResponseAudio()) {
         try {
           final responseAudio = _geminiRealtime!.getResponseAudioByteData();
           if (responseAudio.lengthInBytes > 0) {
             // Feed audio using PcmArrayInt16 like original repository
             FlutterPcmSound.feed(PcmArrayInt16(bytes: responseAudio));
+            _playingAudio = true;
+          } else {
+            // No more audio data available
+            _playingAudio = false;
           }
         } catch (e) {
           _logEvent('❌ Audio feed error: $e');
+          _playingAudio = false;
         }
       } else {
+        // No audio ready from Gemini
         _playingAudio = false;
       }
     }
+    // Don't feed if buffer is still full (prevents choppy playback)
   }
 
   // Old manual photo handling removed - now using RxPhoto _handleFramePhoto()

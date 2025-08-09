@@ -73,11 +73,13 @@ class FrameGeminiRealtimeIntegration {
       
       // Initialize PCM audio player with basic error handling
       try {
+        const sampleRate = 24000; // Gemini responses are 24kHz
         await FlutterPcmSound.setup(
-          sampleRate: 24000, // Gemini responses are 24kHz
+          sampleRate: sampleRate,
           channelCount: 1,   // Mono audio
         );
-        FlutterPcmSound.setFeedThreshold(500); // Smaller threshold for responsiveness
+        // Use same feed threshold calculation as main app for consistency
+        FlutterPcmSound.setFeedThreshold(sampleRate ~/ 30); // 800 frames = ~33ms buffer
         _isAudioSetup = true;
         _logger('✅ Audio player ready');
       } catch (e) {
