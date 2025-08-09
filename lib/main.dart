@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
+import 'package:frame_msg/rx/photo.dart';
+import 'package:frame_msg/rx/audio.dart';
 import 'package:frame_msg/tx/plain_text.dart';
 import 'package:frame_msg/tx/capture_settings.dart';
 import 'package:frame_msg/tx/code.dart';
@@ -136,10 +138,28 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Audio response handling for fallback mode
   Timer? _audioResponseTimer;
+  
+  // Photo handling using official Frame RxPhoto (like original repository)
+  late final RxPhoto _rxPhoto;
+  Stream<Uint8List>? _photoStream;
+  StreamSubscription<Uint8List>? _photoSubs;
+  
+  // Audio handling using official Frame RxAudio (like original repository)
+  late final RxAudio _rxAudio;
+  Stream<Uint8List>? _frameAudioSampleStream;
+  StreamSubscription<Uint8List>? _frameAudioSubs;
 
   @override
   void initState() {
     super.initState();
+    
+    // Initialize RxPhoto and RxAudio like original repository
+    _rxPhoto = RxPhoto(
+      quality: 'VERY_HIGH',
+      resolution: 720,
+    );
+    _rxAudio = RxAudio(streaming: true);
+    
     _initializeServices();
     _loadGeminiApiKey();
     _requestPermissions();
@@ -152,6 +172,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _audioSubscription?.cancel();
     _frameLogSubscription?.cancel();
     _frameDataSubscription?.cancel();
+    _photoSubs?.cancel(); // Clean up photo subscription
+    _frameAudioSubs?.cancel(); // Clean up audio subscription
     _photoTimer?.cancel(); // Clean up photo timer
     _audioResponseTimer?.cancel(); // Clean up audio response timer
     _frameAudioService?.dispose();
@@ -324,40 +346,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           // Handle official Frame message protocol
           final messageType = data[0];
           
-          // Handle audio data messages (from Frame Lua script) - PRIORITY for performance
-          if (messageType == 0x05 || messageType == 0x06) {
-            // 0x05 = AUDIO_DATA_NON_FINAL_MSG, 0x06 = AUDIO_DATA_FINAL_MSG
-            if (data.length > 1) {
-              final audioData = Uint8List.fromList(data.sublist(1));
-              _handleAudioData(audioData, messageType == 0x06);
-            }
-          }
+          // NOTE: Audio data (0x05, 0x06) now handled by RxAudio stream
+          // NOTE: Photo data now handled by RxPhoto stream  
           // Handle tap messages (0x09) - Quick check
-          else if (messageType == 0x09) {
+          if (messageType == 0x09) {
             _logEvent('👆 Frame tap detected');
-          }
-          // Handle photo data - optimized detection for performance
-          else if (data.length > 500) { // Lower threshold for small photos
-            // Check for JPEG after message type byte (official Frame protocol)
-            if (data.length >= 3 && data[1] == 0xFF && data[2] == 0xD8) {
-              try {
-                final photoData = Uint8List.fromList(data.sublist(1));
-                _logEvent('📸 Frame JPEG photo: ${photoData.length} bytes');
-                _handlePhotoReceived(photoData);
-              } catch (e) {
-                _logEvent('⚠️ Frame photo error: $e');
-              }
-            }
-            // Check for raw JPEG data (direct from Frame camera)
-            else if (data.length >= 2 && data[0] == 0xFF && data[1] == 0xD8) {
-              try {
-                final photoData = Uint8List.fromList(data);
-                _logEvent('📸 Raw JPEG photo: ${data.length} bytes');
-                _handlePhotoReceived(photoData);
-              } catch (e) {
-                _logEvent('⚠️ Raw photo error: $e');
-              }
-            }
           }
         }
       });
@@ -477,9 +470,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
           });
           _logEvent('✅ AI session started (basic mode)');
           
-          // Start audio streaming and camera
-          await _startAudioStreaming();
-          await _startCameraCapture();
+          // Start unified streaming like original repository
+          await _startFrameStreaming();
         } else {
           _logEvent('❌ Failed to connect to Gemini');
         }
@@ -489,15 +481,31 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  Future<void> _startAudioStreaming() async {
+  /// Start Frame streaming (both audio and photos) like original repository
+  Future<void> _startFrameStreaming() async {
     if (_isAudioStreaming || !_isConnected || frame == null) return;
     
     try {
-      _logEvent('🎤 Starting Frame audio streaming (official protocol)...');
+      _logEvent('🚀 Starting Frame streaming (RxAudio + RxPhoto)...');
       
-      // Send audio subscription message using official Frame protocol
-      // Message 0x30 (AUDIO_SUBS_MSG) with value 1 = start audio subscription
+      // Set up RxAudio stream like original repository
+      _frameAudioSampleStream = _rxAudio.attach(frame!.dataResponse);
+      _frameAudioSubs?.cancel();
+      _frameAudioSubs = _frameAudioSampleStream!.listen(_handleFrameAudio);
+      
+      // Send audio subscription message
       await frame!.sendMessage(0x30, TxCode(value: 1).pack());
+      
+      // Start periodic photo capture immediately like original
+      await _requestPhoto();
+      _photoTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+        if (!_isConnected || !_isSessionActive) {
+          timer.cancel();
+          _photoTimer = null;
+          return;
+        }
+        await _requestPhoto();
+      });
       
       setState(() {
         _isAudioStreaming = true;
@@ -505,30 +513,48 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _totalAudioBytes = 0;
       });
       
-      _logEvent('✅ Audio streaming started - Frame will send audio data via 0x05/0x06 messages');
+      _logEvent('✅ Frame streaming started - RxAudio + periodic photos (3s)');
     } catch (e) {
-      _logEvent('❌ Audio streaming error: $e');
+      _logEvent('❌ Frame streaming start error: $e');
     }
   }
 
-  Future<void> _stopAudioStreaming() async {
-    if (!_isAudioStreaming || frame == null) return;
+  // Old audio streaming methods removed - now using unified _startFrameStreaming()
+
+  /// Stop Frame streaming (both audio and photos) like original repository
+  Future<void> _stopFrameStreaming() async {
+    if (!_isAudioStreaming) return;
     
     try {
-      _logEvent('⏹️ Stopping Frame audio streaming...');
+      _logEvent('⏹️ Stopping Frame streaming (RxAudio + RxPhoto)...');
       
-      // Send audio unsubscribe message using official Frame protocol
-      // Message 0x30 (AUDIO_SUBS_MSG) with value 0 = stop audio subscription
-      await frame!.sendMessage(0x30, TxCode(value: 0).pack());
+      // Cancel RxAudio subscription first
+      _frameAudioSubs?.cancel();
+      _frameAudioSubs = null;
+      _frameAudioSampleStream = null;
+      
+      // Cancel photo timer
+      _photoTimer?.cancel();
+      _photoTimer = null;
+      
+      // Cancel RxPhoto subscription
+      _photoSubs?.cancel();
+      _photoSubs = null;
+      _photoStream = null;
+      
+      // Send audio unsubscribe message
+      if (frame != null) {
+        await frame!.sendMessage(0x30, TxCode(value: 0).pack());
+      }
       
       setState(() {
         _isAudioStreaming = false;
         _isVoiceDetected = false;
       });
       
-      _logEvent('✅ Audio streaming stopped');
+      _logEvent('✅ Frame streaming stopped - RxAudio + photos cancelled');
     } catch (e) {
-      _logEvent('❌ Audio stop error: $e');
+      _logEvent('❌ Frame streaming stop error: $e');
     }
   }
 
@@ -546,19 +572,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         }
         
         try {
-          // Request a photo using Frame SDK with higher quality
-          await frame!.sendMessage(0x0d, TxCaptureSettings(
-            qualityIndex: 75, // Higher quality like original
-          ).pack());
+          // Request photo using RxPhoto like original repository
+          await _requestPhoto();
         } catch (e) {
           _logEvent('⚠️ Periodic photo error: $e');
         }
       });
       
-      // Take first photo immediately
-      await frame!.sendMessage(0x0d, TxCaptureSettings(
-        qualityIndex: 75,
-      ).pack());
+      // Take first photo immediately using RxPhoto
+      await _requestPhoto();
       
       _logEvent('📸 Periodic photo capture started');
     } catch (e) {
@@ -572,34 +594,83 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _logEvent('📷 Photo capture stopped');
   }
 
-  /// Handle audio data received from Frame using official protocol
-  void _handleAudioData(Uint8List audioData, bool isFinal) {
-    if (audioData.isEmpty) return;
-    
-    // Update statistics
-    _audioPacketsReceived++;
-    _totalAudioBytes += audioData.length;
-    
-    // Log statistics periodically
-    if (_audioPacketsReceived % 50 == 0) {
-      _logEvent('📊 Audio: $_audioPacketsReceived packets, ${(_totalAudioBytes/1024).toStringAsFixed(1)} KB');
+  /// Request photo using RxPhoto like original repository
+  Future<void> _requestPhoto() async {
+    if (!_isConnected || frame == null) {
+      _logEvent('❌ Cannot capture photo - Frame not connected');
+      return;
     }
     
-    // Send audio data to Gemini directly (official repository pattern)
-    if (_geminiRealtime != null && _isSessionActive && _geminiRealtime!.isConnected()) {
-      try {
-        // Upsample Frame audio from 8kHz to 16kHz for Gemini
-        final upsampledAudio = AudioUpsampler.upsample8kTo16k(audioData);
-        _geminiRealtime!.sendAudio(upsampledAudio);
-      } catch (e) {
-        _logEvent('❌ Gemini audio send error: $e');
-      }
-    }
-    
-    if (isFinal) {
-      _logEvent('🎤 Audio stream ended (final message received)');
+    try {
+      _logEvent('📸 Photo capture requested (RxPhoto)...');
+      
+      // Set up photo stream like original repository
+      _photoStream = _rxPhoto.attach(frame!.dataResponse);
+      _photoSubs?.cancel();
+      _photoSubs = _photoStream!.listen(_handleFramePhoto);
+      
+      // Send capture settings like original repository
+      await frame!.sendMessage(0x0d, TxCaptureSettings(
+        resolution: 720,
+        qualityIndex: 75, // VERY_HIGH quality
+      ).pack());
+      
+      _logEvent('✅ Photo stream attached and capture requested');
+    } catch (e) {
+      _logEvent('❌ Photo request error: $e');
     }
   }
+  
+  /// Handle photo received via RxPhoto (like original repository)
+  void _handleFramePhoto(Uint8List jpegBytes) {
+    _logEvent('📸 Photo received via RxPhoto (${jpegBytes.length} bytes)');
+    
+    // Send photo to Gemini if connected (original repo pattern)
+    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
+      _geminiRealtime!.sendPhoto(jpegBytes);
+      _logEvent('📸 Photo sent to Gemini for analysis');
+    }
+
+    // Update UI with latest image (original repo style)
+    try {
+      setState(() {
+        _lastPhoto = jpegBytes;
+        _image = Image.memory(jpegBytes, gaplessPlayback: true);
+      });
+      _logEvent('✅ Photo display updated in UI via RxPhoto');
+    } catch (e) {
+      _logEvent('❌ Photo display update failed: $e');
+    }
+  }
+
+  /// Handle audio received via RxAudio (like original repository) 
+  void _handleFrameAudio(Uint8List pcm16x8) {
+    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
+      try {
+        // Upsample PCM16 from 8kHz to 16kHz for Gemini (same as original)
+        final pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8);
+        _geminiRealtime!.sendAudio(pcm16x16);
+        
+        // Update statistics
+        _audioPacketsReceived++;
+        _totalAudioBytes += pcm16x8.length;
+        
+        // Log statistics periodically (less frequent for RxAudio)
+        if (_audioPacketsReceived % 100 == 0) {
+          _logEvent('📊 RxAudio: $_audioPacketsReceived packets, ${(_totalAudioBytes/1024).toStringAsFixed(1)} KB');
+        }
+      } catch (e) {
+        _logEvent('❌ RxAudio processing error: $e');
+      }
+    }
+  }
+
+  /// Manually capture a single photo for testing
+  Future<void> _capturePhotoManually() async {
+    await _requestPhoto();
+  }
+
+  // Old manual audio handling removed - now using RxAudio _handleFrameAudio()
 
   /// Handle audio ready callback from Gemini in fallback mode
   void _handleGeminiAudioReady() {
@@ -627,27 +698,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  /// Handle photo received from Frame (original repo style)
-  void _handlePhotoReceived(Uint8List photoData) {
-    _logEvent('📸 Photo received from Frame');
-    
-    // Send photo to Gemini if connected (original repo pattern)
-    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
-      _geminiRealtime!.sendPhoto(photoData);
-      _logEvent('📸 Photo sent to Gemini for analysis');
-    }
-
-    // Update UI with latest image (original repo style)
-    setState(() {
-      _lastPhoto = photoData;
-      _image = Image.memory(photoData, gaplessPlayback: true);
-    });
-    
-    // Send photo to the integration service if active (preserve existing functionality)
-    if (_frameGeminiIntegration != null) {
-      _frameGeminiIntegration!.setLastCapturedPhoto(photoData);
-    }
-  }
+  // Old manual photo handling removed - now using RxPhoto _handleFramePhoto()
 
   Future<void> _stopSession() async {
     if (!_isSessionActive) return;
@@ -665,8 +716,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _audioResponseTimer?.cancel();
         _audioResponseTimer = null;
       } else {
-        // Fall back to the old method
-        await _stopAudioStreaming();
+        // Fall back to unified streaming stop
+        await _stopFrameStreaming();
         
         // Disconnect from Gemini in basic mode
         if (_geminiRealtime != null) {
@@ -814,7 +865,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     if (_isConnected) const SizedBox(height: 16),
                     
                     // Live Photo View (original repo style)
-                    _image ?? Container(),
+                    _buildPhotoDisplay(),
                     const SizedBox(height: 16),
                     
                     // Control Buttons
@@ -982,11 +1033,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: (_isConnected && _isSessionActive && _frameGeminiIntegration != null) 
-                        ? () => _frameGeminiIntegration!.captureAndSendPhoto() 
-                        : _isConnected ? _startCameraCapture : null,
+                    onPressed: _isConnected ? _capturePhotoManually : null,
                     icon: const Icon(Icons.camera),
-                    label: Text(_isSessionActive ? 'Capture & Send to AI' : 'Take Photo'),
+                    label: const Text('Take Photo'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1171,6 +1220,77 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                   _logEvent('🎭 Voice changed to: ${value.displayName}');
                 }
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoDisplay() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  '📷 Live Camera View',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  _image != null ? 'Image Active' : 'No Image',
+                  style: TextStyle(
+                    color: _image != null ? Colors.green : Colors.grey,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            Container(
+              width: double.infinity,
+              height: 200,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.withAlpha(128)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _image != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: _image,
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _isSessionActive ? Icons.camera_alt : Icons.camera_alt_outlined,
+                            color: _isSessionActive ? Colors.blue : Colors.grey,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _isSessionActive 
+                                ? 'Waiting for photo...' 
+                                : 'Start session to capture photos',
+                            style: TextStyle(
+                              color: _isSessionActive ? Colors.blue : Colors.grey,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (_lastPhoto != null && _image == null)
+                            const Text(
+                              '⚠️ Photo data exists but display failed',
+                              style: TextStyle(color: Colors.orange, fontSize: 12),
+                            ),
+                        ],
+                      ),
+                    ),
             ),
           ],
         ),
