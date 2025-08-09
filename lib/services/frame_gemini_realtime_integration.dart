@@ -267,6 +267,8 @@ class FrameGeminiRealtimeIntegration {
   void _sendAudioToGemini(Uint8List audioData) {
     if (_geminiRealtime.isConnected()) {
       _geminiRealtime.sendAudio(audioData);
+    } else {
+      _logger('⚠️ Cannot send audio - Gemini not connected');
     }
   }
 

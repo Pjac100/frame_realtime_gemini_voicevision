@@ -103,7 +103,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Session state
   bool _isSessionActive = false;
-  Uint8List? _lastPhoto;
+  // ignore: unused_field
+  Uint8List? _lastPhoto; // For integration service
+  Widget? _image; // Original repo style photo display
   
   // Photo capture timer (like original repository)
   Timer? _photoTimer;
@@ -566,7 +568,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
     
     // Send audio data to Gemini directly (official repository pattern)
-    if (_geminiRealtime != null && _isSessionActive) {
+    if (_geminiRealtime != null && _isSessionActive && _geminiRealtime!.isConnected()) {
       try {
         // Upsample Frame audio from 8kHz to 16kHz for Gemini
         final upsampledAudio = AudioUpsampler.upsample8kTo16k(audioData);
@@ -581,22 +583,25 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  /// Handle photo received from Frame and send to integration service
+  /// Handle photo received from Frame (original repo style)
   void _handlePhotoReceived(Uint8List photoData) {
+    _logEvent('📸 Photo received from Frame');
+    
+    // Send photo to Gemini if connected (original repo pattern)
+    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
+      _geminiRealtime!.sendPhoto(photoData);
+      _logEvent('📸 Photo sent to Gemini for analysis');
+    }
+
+    // Update UI with latest image (original repo style)
     setState(() {
       _lastPhoto = photoData;
+      _image = Image.memory(photoData, gaplessPlayback: true);
     });
     
-    // Send photo to the integration service if active
+    // Send photo to the integration service if active (preserve existing functionality)
     if (_frameGeminiIntegration != null) {
-      // Update the integration service with the new photo
       _frameGeminiIntegration!.setLastCapturedPhoto(photoData);
-      
-      if (_isSessionActive) {
-        _logEvent('📸 Photo received and available for AI analysis');
-      } else {
-        _logEvent('📸 Photo received and cached');
-      }
     }
   }
 
@@ -619,6 +624,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
       setState(() {
         _isSessionActive = false;
+        _image = null; // Clear image display when session ends
       });
       
       // Stop foreground service
@@ -749,9 +755,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     if (_isConnected) _buildAudioStatusSection(),
                     if (_isConnected) const SizedBox(height: 16),
                     
-                    // Live Photo View
-                    if (_lastPhoto != null) _buildPhotoView(),
-                    if (_lastPhoto != null) const SizedBox(height: 16),
+                    // Live Photo View (original repo style)
+                    _image ?? Container(),
+                    const SizedBox(height: 16),
                     
                     // Control Buttons
                     _buildControlButtons(),
@@ -1183,72 +1189,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     );
   }
 
-  Widget _buildPhotoView() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '📷 Live Camera View',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxHeight: 250,
-                minHeight: 150,
-              ),
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: _lastPhoto != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          _lastPhoto!,
-                          fit: BoxFit.contain,
-                          width: double.infinity,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error, color: Colors.red, size: 32),
-                                  SizedBox(height: 8),
-                                  Text('Image display error', style: TextStyle(color: Colors.red)),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.camera_alt, color: Colors.grey, size: 32),
-                            const SizedBox(height: 8),
-                            Text(
-                              _isSessionActive 
-                                ? 'Waiting for photo capture...' 
-                                : 'No photo captured yet',
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildEventLog() {
     return Card(
