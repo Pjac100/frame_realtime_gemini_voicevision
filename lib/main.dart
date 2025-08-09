@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:simple_frame_app/simple_frame_app.dart';
 import 'package:frame_msg/rx/photo.dart';
 import 'package:frame_msg/rx/audio.dart';
+import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:frame_msg/tx/plain_text.dart';
 import 'package:frame_msg/tx/capture_settings.dart';
 import 'package:frame_msg/tx/code.dart';
@@ -138,6 +139,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Audio response handling for fallback mode
   Timer? _audioResponseTimer;
+  bool _isAudioPlayerSetup = false;
+  bool _playingAudio = false;
   
   // Photo handling using official Frame RxPhoto (like original repository)
   late final RxPhoto _rxPhoto;
@@ -176,6 +179,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _frameAudioSubs?.cancel(); // Clean up audio subscription
     _photoTimer?.cancel(); // Clean up photo timer
     _audioResponseTimer?.cancel(); // Clean up audio response timer
+    
+    // Cleanup FlutterPcmSound
+    if (_isAudioPlayerSetup) {
+      try {
+        FlutterPcmSound.release();
+      } catch (e) {
+        debugPrint('FlutterPcmSound release error: $e');
+      }
+    }
     _frameAudioService?.dispose();
     _frameGeminiIntegration?.dispose();
     if (frame != null) {
@@ -214,6 +226,18 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         _handleGeminiAudioReady, // Audio ready callback for fallback mode
         _logEvent, // Event logger
       );
+      
+      // Initialize FlutterPcmSound for audio playback like original repository
+      try {
+        const sampleRate = 24000; // Same as original repository
+        await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
+        FlutterPcmSound.setFeedThreshold(sampleRate ~/ 30); // Same as original
+        FlutterPcmSound.setFeedCallback(_onAudioFeed);
+        _isAudioPlayerSetup = true;
+        _logEvent('✅ FlutterPcmSound audio player ready');
+      } catch (e) {
+        _logEvent('⚠️ FlutterPcmSound setup error: $e');
+      }
       
       // Frame audio logs handled directly in main message processing
       
@@ -688,12 +712,32 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         if (responseAudio.lengthInBytes > 0) {
           _logEvent('🔊 Playing Gemini response (${responseAudio.lengthInBytes} bytes)');
           
-          // For now, just log that we received audio
-          // TODO: Add actual audio playback implementation if needed
-          // The main thing is that Gemini is responding, which means the connection works
+          if (_isAudioPlayerSetup && !_playingAudio) {
+            _playingAudio = true;
+            FlutterPcmSound.start();
+          }
         }
       } catch (e) {
         _logEvent('❌ Audio response error: $e');
+      }
+    }
+  }
+
+  /// Audio feed callback like original repository
+  void _onAudioFeed(int remainingFrames) {
+    if (remainingFrames < 2000) { // Same threshold as original
+      if (_geminiRealtime != null && _geminiRealtime!.hasResponseAudio()) {
+        try {
+          final responseAudio = _geminiRealtime!.getResponseAudioByteData();
+          if (responseAudio.lengthInBytes > 0) {
+            // Feed audio using PcmArrayInt16 like original repository
+            FlutterPcmSound.feed(PcmArrayInt16(bytes: responseAudio));
+          }
+        } catch (e) {
+          _logEvent('❌ Audio feed error: $e');
+        }
+      } else {
+        _playingAudio = false;
       }
     }
   }
@@ -727,6 +771,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         // Stop audio response monitoring
         _audioResponseTimer?.cancel();
         _audioResponseTimer = null;
+        
+        // Stop audio playback
+        if (_playingAudio) {
+          _playingAudio = false;
+        }
         
         _logEvent('⏹️ AI session stopped (fallback mode)');
       }
