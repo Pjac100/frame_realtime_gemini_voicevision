@@ -25,7 +25,7 @@ class GeminiRealtime {
     'setup': {
       'model': 'models/gemini-2.0-flash-live-001',
       'generation_config': {
-        'response_modalities': 'audio',
+        'response_modalities': ['AUDIO'],
         'speech_config': {
           'voice_config': {
             'prebuilt_voice_config': {'voice_name': 'Puck'},
