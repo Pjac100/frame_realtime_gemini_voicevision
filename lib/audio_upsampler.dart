@@ -1,6 +1,12 @@
 import 'dart:typed_data';
 
 class AudioUpsampler {
+  /// Validate that the input audio is the expected PCM16 format
+  static bool isValidPcm16(Uint8List audioData) {
+    // PCM16 should have even number of bytes (2 bytes per sample)
+    return audioData.length % 2 == 0 && audioData.isNotEmpty;
+  }
+
   /// Upsamples PCM16 audio data from 8kHz to 16kHz using linear interpolation
   /// Input should be a Uint8List containing PCM16 audio data at 8kHz
   /// Returns a Uint8List containing the upsampled PCM16 audio data at 16kHz

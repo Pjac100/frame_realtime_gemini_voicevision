@@ -25,7 +25,7 @@ class GeminiRealtime {
     'setup': {
       'model': 'models/gemini-2.0-flash-live-001',
       'generation_config': {
-        'response_modalities': 'audio',
+        'response_modalities': ['AUDIO'],
         'speech_config': {
           'voice_config': {
             'prebuilt_voice_config': {'voice_name': 'Puck'},
@@ -95,13 +95,30 @@ class GeminiRealtime {
       ),
     );
 
-    // connection doesn't complete immediately, wait until it's ready
-    // TODO check what happens if API key is bad, host is bad etc, how long are the timeouts?
-    // and return false if not connected properly (or throw the exception and print the error?)
-    await _channel!.ready;
+    // connection doesn't complete immediately, wait until it's ready with timeout
+    try {
+      await _channel!.ready.timeout(const Duration(seconds: 10));
+    } catch (e) {
+      eventLogger('Gemini connection timeout or error: $e');
+      _log.severe('Connection failed: $e');
+      _connected = false;
+      return false;
+    }
 
-    // set up stream handler for channel to handle events
-    _channelSubs = _channel!.stream.listen(_handleGeminiEvent);
+    // set up stream handler for channel to handle events with error handling
+    _channelSubs = _channel!.stream.listen(
+      _handleGeminiEvent,
+      onError: (error) {
+        eventLogger('Gemini WebSocket error: $error');
+        _log.severe('WebSocket error: $error');
+        _connected = false;
+      },
+      onDone: () {
+        eventLogger('Gemini WebSocket closed');
+        _log.info('WebSocket connection closed');
+        _connected = false;
+      },
+    );
 
     // set up the config for the model/modality
     _log.info(_setupMap);
