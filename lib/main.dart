@@ -16,8 +16,6 @@ import 'package:path_provider/path_provider.dart';
 
 // ObjectBox imports
 import 'package:frame_realtime_gemini_voicevision/services/vector_db_service.dart';
-import 'package:frame_realtime_gemini_voicevision/services/frame_audio_streaming_service.dart';
-import 'package:frame_realtime_gemini_voicevision/services/frame_gemini_realtime_integration.dart';
 import 'package:frame_realtime_gemini_voicevision/gemini_realtime.dart' as gemini_realtime;
 import 'package:frame_realtime_gemini_voicevision/audio_upsampler.dart';
 import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
@@ -126,21 +124,15 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // Vector database with MobileBERT
   VectorDbService? _vectorDb;
   
-  // Frame audio streaming service
-  FrameAudioStreamingService? _frameAudioService;
-  
-  // Complete Frame-Gemini integration service
-  FrameGeminiRealtimeIntegration? _frameGeminiIntegration;
-  gemini_realtime.GeminiRealtime? _geminiRealtime;
+  // Simple Gemini realtime connection (like original)
+  gemini_realtime.GeminiRealtime? _gemini;
   
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<String>? _frameLogSubscription;
   StreamSubscription<dynamic>? _frameDataSubscription;
   
-  // Audio response handling for fallback mode
-  Timer? _audioResponseTimer;
+  // Audio playback setup (like original)
   bool _isAudioPlayerSetup = false;
-  bool _playingAudio = false;
   
   // Photo handling using official Frame RxPhoto (like original repository)
   late final RxPhoto _rxPhoto;
@@ -178,7 +170,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _photoSubs?.cancel(); // Clean up photo subscription
     _frameAudioSubs?.cancel(); // Clean up audio subscription
     _photoTimer?.cancel(); // Clean up photo timer
-    _audioResponseTimer?.cancel(); // Clean up audio response timer
     
     // Cleanup FlutterPcmSound
     if (_isAudioPlayerSetup) {
@@ -188,8 +179,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
         debugPrint('FlutterPcmSound release error: $e');
       }
     }
-    _frameAudioService?.dispose();
-    _frameGeminiIntegration?.dispose();
     if (frame != null) {
       disconnectFrame();
     }
@@ -213,34 +202,28 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
   
-  /// Initialize Frame-specific services after successful connection
+  /// Initialize Frame-specific services after successful connection (like original)
   Future<void> _initializeFrameServices() async {
     try {
       _logEvent('🔧 Initializing Frame services...');
       
-      // Audio streaming now handled directly using official Frame protocol
-      _logEvent('🎤 Audio will be handled via official Frame message protocol');
-      
-      // Initialize Gemini Realtime service  
-      _geminiRealtime = gemini_realtime.GeminiRealtime(
-        _handleGeminiAudioReady, // Audio ready callback for fallback mode
+      // Initialize Gemini Realtime service (simple pattern like original)
+      _gemini = gemini_realtime.GeminiRealtime(
+        () {}, // Simple audio ready callback
         _logEvent, // Event logger
       );
       
-      // Initialize FlutterPcmSound for audio playbook like original repository
+      // Initialize FlutterPcmSound for audio playback like original repository
       try {
         const sampleRate = 24000; // Same as original repository
         await FlutterPcmSound.setup(sampleRate: sampleRate, channelCount: 1);
-        // Use same feed threshold as original: smaller for more responsive audio
         FlutterPcmSound.setFeedThreshold(sampleRate ~/ 30); // 800 frames = ~33ms buffer
-        FlutterPcmSound.setFeedCallback(_onAudioFeed);
+        FlutterPcmSound.setFeedCallback(_onFeed); // Use original callback name
         _isAudioPlayerSetup = true;
-        _logEvent('✅ FlutterPcmSound audio player ready (${sampleRate ~/ 30} frame threshold)');
+        _logEvent('✅ FlutterPcmSound audio player ready');
       } catch (e) {
         _logEvent('⚠️ FlutterPcmSound setup error: $e');
       }
-      
-      // Frame audio logs handled directly in main message processing
       
       _logEvent('✅ Frame services initialized');
     } catch (e) {
@@ -386,27 +369,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Connection monitoring removed - handled by simple_frame_app package (official repository pattern)
 
-  /// Initialize Frame audio services without deploying scripts (to avoid disconnection)
-  Future<void> _initializeFrameAudioSimplified() async {
-    if (frame == null || !_isConnected) {
-      _logEvent('❌ Frame not available for audio initialization');
-      return;
-    }
-    
-    try {
-      _logEvent('🎤 Preparing Frame audio services...');
-      
-      if (_geminiRealtime != null) {
-        // For now, skip integration service creation - use direct Frame protocol
-        _logEvent('🔗 Using direct Frame protocol - ready for audio streaming');
-      }
-      
-    } catch (e) {
-      _logEvent('❌ Audio service prep error: $e');
-      _logEvent('ℹ️ Audio setup will be attempted when starting session');
-    }
-  }
-
 
 
   Future<void> _disconnect() async {
@@ -445,61 +407,35 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🚀 Starting AI session...');
       
-      // Scripts are automatically deployed by simple_frame_app during connection
-      _logEvent('📱 Frame ready - official Lua scripts already deployed');
+      // Connect to Gemini directly (like original repository)
+      _logEvent('🔗 Connecting to Gemini...');
       
-      // Use the integrated service if available
-      if (_frameGeminiIntegration != null) {
-        final success = await _frameGeminiIntegration!.startSession(
-          geminiApiKey: _geminiApiKey,
-          voice: _mapVoiceName(_selectedVoice),
-          systemInstruction: 'You are a helpful AI assistant integrated with Frame smart glasses. '
-                           'You can see what the user sees through their camera and hear their voice. '
-                           'Keep responses concise and conversational. The user is wearing Frame glasses.',
-        );
+      final geminiConnected = await _gemini!.connect(
+        _geminiApiKey,
+        _mapVoiceName(_selectedVoice),
+        'You are a helpful AI assistant integrated with Frame smart glasses. '
+        'You can see what the user sees through their camera and hear their voice. '
+        'Keep responses concise and conversational. The user is wearing Frame glasses.',
+      );
+      
+      if (geminiConnected) {
+        setState(() {
+          _isSessionActive = true;
+        });
+        _logEvent('✅ AI session started');
         
-        if (success) {
-          setState(() {
-            _isSessionActive = true;
-          });
-          _logEvent('✅ AI session started successfully');
-          
-          // Start foreground service for background operation (matches official repo)
-          try {
-            await startForegroundService();
-            _logEvent('📱 Foreground service started');
-          } catch (e) {
-            _logEvent('⚠️ Foreground service warning: $e');
-          }
-          
-          // Start camera capture for vision
-          await _startCameraCapture();
-        } else {
-          _logEvent('❌ Failed to start AI session');
+        // Start foreground service for background operation
+        try {
+          await startForegroundService();
+          _logEvent('📱 Foreground service started');
+        } catch (e) {
+          _logEvent('⚠️ Foreground service warning: $e');
         }
+        
+        // Start Frame streaming (like original repository)
+        await _startFrameStreaming();
       } else {
-        // Fallback mode - connect to Gemini directly
-        _logEvent('🔗 Connecting to Gemini (basic mode)...');
-        
-        final geminiConnected = await _geminiRealtime!.connect(
-          _geminiApiKey,
-          _mapVoiceName(_selectedVoice),
-          'You are a helpful AI assistant integrated with Frame smart glasses. '
-          'You can see what the user sees through their camera and hear their voice. '
-          'Keep responses concise and conversational. The user is wearing Frame glasses.',
-        );
-        
-        if (geminiConnected) {
-          setState(() {
-            _isSessionActive = true;
-          });
-          _logEvent('✅ AI session started (basic mode)');
-          
-          // Start unified streaming like original repository
-          await _startFrameStreaming();
-        } else {
-          _logEvent('❌ Failed to connect to Gemini');
-        }
+        _logEvent('❌ Failed to connect to Gemini');
       }
     } catch (e) {
       _logEvent('❌ Session start error: $e');
@@ -651,8 +587,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     _logEvent('📸 Photo received via RxPhoto (${jpegBytes.length} bytes)');
     
     // Send photo to Gemini if connected (original repo pattern)
-    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
-      _geminiRealtime!.sendPhoto(jpegBytes);
+    if (_gemini != null && _gemini!.isConnected()) {
+      _gemini!.sendPhoto(jpegBytes);
       _logEvent('📸 Photo sent to Gemini for analysis');
     }
 
@@ -668,31 +604,20 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  /// Handle audio received via RxAudio (like original repository) 
+  /// Handle audio received via RxAudio (exactly like original repository)
   void _handleFrameAudio(Uint8List pcm16x8) {
-    if (_geminiRealtime != null && _geminiRealtime!.isConnected()) {
-      try {
-        // Stop any ongoing audio playback when user speaks (feedback prevention)
-        if (_playingAudio) {
-          _geminiRealtime!.stopResponseAudio();
-          _playingAudio = false;
-          _logEvent('🤫 Interrupted AI response - user speaking');
-        }
-        
-        // Upsample PCM16 from 8kHz to 16kHz for Gemini (same as original)
-        final pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8);
-        _geminiRealtime!.sendAudio(pcm16x16);
-        
-        // Update statistics
-        _audioPacketsReceived++;
-        _totalAudioBytes += pcm16x8.length;
-        
-        // Log statistics periodically (less frequent for RxAudio)
-        if (_audioPacketsReceived % 100 == 0) {
-          _logEvent('📊 RxAudio: $_audioPacketsReceived packets, ${(_totalAudioBytes/1024).toStringAsFixed(1)} KB');
-        }
-      } catch (e) {
-        _logEvent('❌ RxAudio processing error: $e');
+    if (_gemini != null && _gemini!.isConnected()) {
+      // Upsample PCM16 from 8kHz to 16kHz for Gemini (same as original)
+      final pcm16x16 = AudioUpsampler.upsample8kTo16k(pcm16x8);
+      _gemini!.sendAudio(pcm16x16);
+      
+      // Update statistics
+      _audioPacketsReceived++;
+      _totalAudioBytes += pcm16x8.length;
+      
+      // Log statistics periodically
+      if (_audioPacketsReceived % 100 == 0) {
+        _logEvent('📊 RxAudio: $_audioPacketsReceived packets, ${(_totalAudioBytes/1024).toStringAsFixed(1)} KB');
       }
     }
   }
@@ -704,69 +629,24 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   // Old manual audio handling removed - now using RxAudio _handleFrameAudio()
 
-  /// Handle audio ready callback from Gemini in fallback mode
-  void _handleGeminiAudioReady() {
-    // Start monitoring for audio responses if not already started
-    _audioResponseTimer ??= Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      _checkForGeminiAudioResponse();
-    });
-  }
 
-  /// Check for and play audio responses from Gemini (fallback mode)
-  void _checkForGeminiAudioResponse() {
-    if (_geminiRealtime != null && _geminiRealtime!.hasResponseAudio()) {
-      try {
-        final responseAudio = _geminiRealtime!.getResponseAudioByteData();
-        if (responseAudio.lengthInBytes > 0) {
-          _logEvent('🔊 Playing Gemini response (${responseAudio.lengthInBytes} bytes)');
-          
-          if (_isAudioPlayerSetup && !_playingAudio) {
-            _playingAudio = true;
-            FlutterPcmSound.start();
-          }
-        }
-      } catch (e) {
-        _logEvent('❌ Audio response error: $e');
-      }
-    }
-  }
-
-  /// Audio feed callback like original repository with improved flow control
-  void _onAudioFeed(int remainingFrames) {
-    // Feed audio when buffer is getting low (like original repo)
+  /// Audio feed callback exactly like original repository
+  void _onFeed(int remainingFrames) {
     if (remainingFrames < 2000) {
-      if (_geminiRealtime != null && _geminiRealtime!.hasResponseAudio()) {
-        try {
-          final responseAudio = _geminiRealtime!.getResponseAudioByteData();
-          if (responseAudio.lengthInBytes > 0) {
-            // Convert ByteData to Int16 list for flutter_pcm_sound (like integration service)
-            final audioSamples = <int>[];
-            for (int i = 0; i < responseAudio.lengthInBytes - 1; i += 2) {
-              final sample = responseAudio.getInt16(i, Endian.little);
-              audioSamples.add(sample);
-            }
-            
-            // Feed audio using PcmArrayInt16.fromList like original repository
-            if (audioSamples.isNotEmpty) {
-              FlutterPcmSound.feed(PcmArrayInt16.fromList(audioSamples));
-              _playingAudio = true;
-            } else {
-              _playingAudio = false;
-            }
-          } else {
-            // No more audio data available
-            _playingAudio = false;
+      if (_gemini != null && _gemini!.hasResponseAudio()) {
+        final responseAudio = _gemini!.getResponseAudioByteData();
+        if (responseAudio.lengthInBytes > 0) {
+          final audioSamples = <int>[];
+          for (int i = 0; i < responseAudio.lengthInBytes - 1; i += 2) {
+            final sample = responseAudio.getInt16(i, Endian.little);
+            audioSamples.add(sample);
           }
-        } catch (e) {
-          _logEvent('❌ Audio feed error: $e');
-          _playingAudio = false;
+          if (audioSamples.isNotEmpty) {
+            FlutterPcmSound.feed(PcmArrayInt16.fromList(audioSamples));
+          }
         }
-      } else {
-        // No audio ready from Gemini
-        _playingAudio = false;
       }
     }
-    // Don't feed if buffer is still full (prevents choppy playback)
   }
 
   // Old manual photo handling removed - now using RxPhoto _handleFramePhoto()
@@ -778,35 +658,14 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       // Stop photo capture first
       await _stopCameraCapture();
       
-      // Use the new integrated service if available
-      if (_frameGeminiIntegration != null) {
-        await _frameGeminiIntegration!.stopSession();
-        _logEvent('⏹️ Complete AI session stopped');
-        
-        // Stop audio response monitoring in case it was running
-        _audioResponseTimer?.cancel();
-        _audioResponseTimer = null;
-      } else {
-        // Fall back to unified streaming stop
-        await _stopFrameStreaming();
-        
-        // Disconnect from Gemini in basic mode
-        if (_geminiRealtime != null) {
-          await _geminiRealtime!.disconnect();
-        }
-        
-        // Stop audio response monitoring
-        _audioResponseTimer?.cancel();
-        _audioResponseTimer = null;
-        
-        // Stop audio playback
-        if (_playingAudio) {
-          _playingAudio = false;
-        }
-        
-        _logEvent('⏹️ AI session stopped (fallback mode)');
+      // Stop Frame streaming
+      await _stopFrameStreaming();
+      
+      // Disconnect from Gemini (simple pattern like original)
+      if (_gemini != null) {
+        await _gemini!.disconnect();
       }
-
+      
       setState(() {
         _isSessionActive = false;
         _image = null; // Clear image display when session ends
@@ -819,6 +678,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       } catch (e) {
         _logEvent('⚠️ Foreground service stop warning: $e');
       }
+      
+      _logEvent('⏹️ AI session stopped');
     } catch (e) {
       _logEvent('❌ Session stop error: $e');
       setState(() {
@@ -836,75 +697,17 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     try {
       _logEvent('🧪 Testing Frame connection...');
       
-      // Test Frame audio service connection if available
-      if (_frameAudioService != null) {
-        final connectionOk = await _frameAudioService!.testConnection();
-        if (connectionOk) {
-          _logEvent('✅ Frame connection test passed');
-        } else {
-          _logEvent('⚠️ Frame connection test had issues');
-        }
-      } else {
-        // Fallback basic test
-        await frame!.sendMessage(0x0a, TxPlainText(
-          text: 'Hello Frame!',
-          x: 50,
-          y: 50,
-          paletteOffset: 2,
-        ).pack());
-        _logEvent('📺 Basic Frame test completed');
-      }
+      // Simple Frame test like original
+      await frame!.sendMessage(0x0a, TxPlainText(
+        text: 'Hello Frame!',
+        x: 50,
+        y: 50,
+        paletteOffset: 2,
+      ).pack());
+      _logEvent('📺 Frame test completed');
       
     } catch (e) {
       _logEvent('❌ Frame test failed: $e');
-    }
-  }
-  
-  Future<void> _testAudioConnection() async {
-    if (_frameAudioService == null || !_isConnected) {
-      _logEvent('❌ Audio service not available');
-      return;
-    }
-    
-    try {
-      _logEvent('🎤 Testing Frame audio capability...');
-      final audioOk = await _frameAudioService!.testAudioCapability();
-      
-      if (audioOk) {
-        _logEvent('✅ Frame audio test completed - check Frame display');
-      } else {
-        _logEvent('❌ Frame audio test failed');
-      }
-      
-    } catch (e) {
-      _logEvent('❌ Audio test error: $e');
-    }
-  }
-  
-  Future<void> _reinitializeAudio() async {
-    if (!_isConnected || frame == null) {
-      _logEvent('❌ Frame not connected');
-      return;
-    }
-    
-    try {
-      _logEvent('🔄 Reinitializing Frame audio service...');
-      
-      // Stop current session if active
-      if (_isSessionActive) {
-        await _stopSession();
-      }
-      
-      // Dispose current audio service
-      _frameAudioService?.dispose();
-      _frameGeminiIntegration?.dispose();
-      
-      // Recreate and reinitialize
-      _frameAudioService = FrameAudioStreamingService(_logEvent);
-      await _initializeFrameAudioSimplified();
-      
-    } catch (e) {
-      _logEvent('❌ Audio reinitialization failed: $e');
     }
   }
 
@@ -1094,9 +897,9 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: (_isConnected && _frameAudioService != null) ? _testAudioConnection : null,
-                    icon: const Icon(Icons.mic_external_on),
-                    label: const Text('Test Audio'),
+                    onPressed: _isConnected ? _capturePhotoManually : null,
+                    icon: const Icon(Icons.camera),
+                    label: const Text('Take Photo'),
                   ),
                 ),
               ],
@@ -1112,14 +915,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     onPressed: _isConnected ? _capturePhotoManually : null,
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Photo'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (_isConnected && _frameAudioService != null) ? _reinitializeAudio : null,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reinit Audio'),
                   ),
                 ),
               ],
@@ -1158,12 +953,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
-                  _frameGeminiIntegration != null 
-                    ? '🚀 Complete AI session active with Frame' 
-                    : '🎤 AI session active with Frame (basic mode)',
-                  style: TextStyle(
+                  '🎤 AI session active with Frame',
+                  style: const TextStyle(
                     fontStyle: FontStyle.italic,
-                    color: _frameGeminiIntegration != null ? Colors.green : Colors.blue,
+                    color: Colors.green,
                   ),
                 ),
               ),
