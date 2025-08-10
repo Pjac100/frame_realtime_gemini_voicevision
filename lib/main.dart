@@ -133,6 +133,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   
   // Audio playback setup (like original)
   bool _isAudioPlayerSetup = false;
+  bool _playingAudio = false;
   
   // Photo handling using official Frame RxPhoto (like original repository)
   late final RxPhoto _rxPhoto;
@@ -209,7 +210,7 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       
       // Initialize Gemini Realtime service (simple pattern like original)
       _gemini = gemini_realtime.GeminiRealtime(
-        () {}, // Simple audio ready callback
+        _audioReadyCallback, // Audio ready callback
         _logEvent, // Event logger
       );
       
@@ -519,35 +520,6 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
     }
   }
 
-  Future<void> _startCameraCapture() async {
-    if (frame == null || !_isConnected) return;
-    
-    try {
-      _logEvent('📷 Starting periodic camera capture...');
-      
-      // Start periodic photo capture like original repository (every 3 seconds)
-      _photoTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-        if (!_isConnected || !_isSessionActive) {
-          timer.cancel();
-          return;
-        }
-        
-        try {
-          // Request photo using RxPhoto like original repository
-          await _requestPhoto();
-        } catch (e) {
-          _logEvent('⚠️ Periodic photo error: $e');
-        }
-      });
-      
-      // Take first photo immediately using RxPhoto
-      await _requestPhoto();
-      
-      _logEvent('📸 Periodic photo capture started');
-    } catch (e) {
-      _logEvent('❌ Camera capture error: $e');
-    }
-  }
 
   Future<void> _stopCameraCapture() async {
     _photoTimer?.cancel();
@@ -629,22 +601,23 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
 
   // Old manual audio handling removed - now using RxAudio _handleFrameAudio()
 
+  /// Audio ready callback exactly like original repository
+  void _audioReadyCallback() {
+    if (!_playingAudio) {
+      _playingAudio = true;
+      _onFeed(0);
+      debugPrint('Response audio started');
+    }
+  }
 
   /// Audio feed callback exactly like original repository
-  void _onFeed(int remainingFrames) {
+  void _onFeed(int remainingFrames) async {
     if (remainingFrames < 2000) {
       if (_gemini != null && _gemini!.hasResponseAudio()) {
-        final responseAudio = _gemini!.getResponseAudioByteData();
-        if (responseAudio.lengthInBytes > 0) {
-          final audioSamples = <int>[];
-          for (int i = 0; i < responseAudio.lengthInBytes - 1; i += 2) {
-            final sample = responseAudio.getInt16(i, Endian.little);
-            audioSamples.add(sample);
-          }
-          if (audioSamples.isNotEmpty) {
-            FlutterPcmSound.feed(PcmArrayInt16.fromList(audioSamples));
-          }
-        }
+        await FlutterPcmSound.feed(PcmArrayInt16(bytes: _gemini!.getResponseAudioByteData()));
+      } else {
+        debugPrint('Response audio ended');
+        _playingAudio = false;
       }
     }
   }
@@ -950,11 +923,11 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
             
             // Status messages
             if (_isSessionActive)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
+              const Padding(
+                padding: EdgeInsets.only(top: 8.0),
                 child: Text(
                   '🎤 AI session active with Frame',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontStyle: FontStyle.italic,
                     color: Colors.green,
                   ),
