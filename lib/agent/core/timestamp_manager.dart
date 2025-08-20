@@ -164,7 +164,7 @@ class TemporalWindow {
   Duration get duration => endTime.difference(startTime);
 
   @override
-  String toString() => 'TemporalWindow(${startTime} - ${endTime}, center: ${centerTime})';
+  String toString() => 'TemporalWindow($startTime - $endTime, center: $centerTime)';
 }
 
 /// Analysis of temporal relationships between timestamped events

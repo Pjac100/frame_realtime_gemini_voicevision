@@ -179,7 +179,7 @@ class LocalLLMService {
       return sentences.first;
     }
     
-    return context.substring(0, 100) + '...';
+    return '${context.substring(0, 100)}...';
   }
 
   /// Parse tool calls from mock response
@@ -192,7 +192,7 @@ class LocalLLMService {
           id: toolCallData['id'],
         );
       }
-      return ToolCall(name: 'unknown', parameters: {});
+      return const ToolCall(name: 'unknown', parameters: {});
     }).toList();
   }
 

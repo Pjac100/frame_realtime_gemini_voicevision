@@ -141,7 +141,7 @@ class _AgentDemoWidgetState extends State<AgentDemoWidget> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _isAgentEnabled ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+            color: _isAgentEnabled ? Colors.green.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _isAgentEnabled ? Colors.green : Colors.grey,
@@ -173,8 +173,8 @@ class _AgentDemoWidgetState extends State<AgentDemoWidget> {
                 label: Text(_isAgentEnabled ? 'Disable Agent' : 'Enable Agent'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isAgentEnabled 
-                      ? Colors.red.withOpacity(0.1) 
-                      : Colors.green.withOpacity(0.1),
+                      ? Colors.red.withValues(alpha: 0.1) 
+                      : Colors.green.withValues(alpha: 0.1),
                 ),
               ),
             ),
@@ -184,7 +184,7 @@ class _AgentDemoWidgetState extends State<AgentDemoWidget> {
               icon: const Icon(Icons.clear),
               label: const Text('Clear'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange.withOpacity(0.1),
+                backgroundColor: Colors.orange.withValues(alpha: 0.1),
               ),
             ),
           ],
@@ -282,7 +282,7 @@ class _AgentDemoWidgetState extends State<AgentDemoWidget> {
         Container(
           height: 200,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: _recentOutputs.isEmpty
@@ -315,10 +315,10 @@ class _AgentDemoWidgetState extends State<AgentDemoWidget> {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: _getTypeColor(output.type).withOpacity(0.1),
+        color: _getTypeColor(output.type).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: _getTypeColor(output.type).withOpacity(0.3),
+          color: _getTypeColor(output.type).withValues(alpha: 0.3),
         ),
       ),
       child: Column(

@@ -239,7 +239,7 @@ void main() {
     });
 
     test('ToolCall should handle parameter extraction', () {
-      final toolCall = ToolCall(
+      const toolCall = ToolCall(
         name: 'store_memory',
         parameters: {
           'content': 'Test content',
