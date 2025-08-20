@@ -24,6 +24,11 @@ import 'package:frame_realtime_gemini_voicevision/objectbox.g.dart';
 import 'package:frame_realtime_gemini_voicevision/foreground_service.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+// Agent system imports
+import 'package:frame_realtime_gemini_voicevision/agent/core/agent_core.dart';
+import 'package:frame_realtime_gemini_voicevision/agent/services/agent_vector_service.dart';
+import 'package:frame_realtime_gemini_voicevision/agent/ui/agent_demo_widget.dart';
+
 // Global ObjectBox store instance
 late Store store;
 
@@ -127,6 +132,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
   // Simple Gemini realtime connection (like original)
   gemini_realtime.GeminiRealtime? _gemini;
   
+  // Agent system
+  AgentCore? _agentCore;
+  AgentVectorService? _agentVectorService;
+  
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<String>? _frameLogSubscription;
   StreamSubscription<dynamic>? _frameDataSubscription;
@@ -184,6 +193,8 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       disconnectFrame();
     }
     _vectorDb?.dispose();
+    _agentCore?.dispose();
+    _agentVectorService?.dispose();
     super.dispose();
   }
 
@@ -197,9 +208,53 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
       _vectorDb = VectorDbService(_logEvent);
       await _vectorDb!.initialize(store);
       
+      // Initialize agent system (non-blocking)
+      await _initializeAgentSystem();
+      
       _logEvent('🔧 Essential services initialized');
     } catch (e) {
       _logEvent('❌ Service initialization error: $e');
+    }
+  }
+
+  /// Initialize agent system (graceful degradation if fails)
+  Future<void> _initializeAgentSystem() async {
+    try {
+      if (_vectorDb == null) {
+        _logEvent('⚠️ Agent system requires vector database');
+        return;
+      }
+
+      // Initialize agent vector service
+      _agentVectorService = AgentVectorService(
+        vectorDbService: _vectorDb!,
+        logger: _logEvent,
+      );
+      
+      final vectorServiceReady = await _agentVectorService!.initialize();
+      if (!vectorServiceReady) {
+        _logEvent('⚠️ Agent vector service initialization failed');
+        return;
+      }
+
+      // Initialize agent core
+      _agentCore = AgentCore(
+        logger: _logEvent,
+        vectorService: _agentVectorService!,
+      );
+      
+      final agentReady = await _agentCore!.initialize();
+      if (agentReady) {
+        _logEvent('✅ Agent system ready (graceful mode)');
+      } else {
+        _logEvent('⚠️ Agent system initialized with limited capabilities');
+      }
+      
+    } catch (e) {
+      _logEvent('⚠️ Agent initialization failed (continuing without agent): $e');
+      // Continue without agent - graceful degradation
+      _agentCore = null;
+      _agentVectorService = null;
     }
   }
   
@@ -722,6 +777,10 @@ class MainAppState extends State<MainApp> with SimpleFrameAppState {
                     
                     // Control Buttons
                     _buildControlButtons(),
+                    const SizedBox(height: 16),
+                    
+                    // Agent Demo UI
+                    AgentDemoWidget(agentCore: _agentCore),
                     const SizedBox(height: 16),
                     
                     // Event Log with fixed height
